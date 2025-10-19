@@ -1,0 +1,2 @@
+#specifies which version of each package to install.
+discord.py==2.6.4

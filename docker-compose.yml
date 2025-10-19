@@ -1,0 +1,15 @@
+#defines beginning of services/containers to run
+services:
+  coursebot:
+    #tells docker to build image from dockerfile in current directory
+    build: .
+    #sets container name
+    container_name: coursebot
+    #automatically restarts container if it crashes unless you stop manually
+    restart: unless-stopped
+    #passes discord bot token from my .env file into container as environment variable
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+    #mounts local data directory to /app/data in container for persistent storage(faster build times)
+    volumes:
+      - ./data:/app/data
