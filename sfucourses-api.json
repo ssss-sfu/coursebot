@@ -1,0 +1,817 @@
+{
+    "schemes": [
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Unofficial API for accessing SFU course outlines, sections, and instructors robustly and used to power [sfucourses.com](https://sfucourses.com). Data is pulled from [SFU Course Outlines REST API](https://www.sfu.ca/outlines/help/api.html). This API is not affiliated with Simon Fraser University.",
+        "title": "sfucourses API",
+        "contact": {}
+    },
+    "host": "api.sfucourses.com",
+    "paths": {
+        "/health": {
+            "get": {
+                "description": "Returns status and version information about the API",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Health check endpoint",
+                "responses": {
+                    "200": {
+                        "description": "Returns status and version information",
+                        "schema": {
+                            "$ref": "#/definitions/main.HealthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/rest/instructors": {
+            "get": {
+                "description": "Retrieves instructors with optional filtering by department, course number, or name",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Instructors"
+                ],
+                "summary": "Get instructors",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Department code (e.g., cmpt, math)",
+                        "name": "dept",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Course number (e.g., 120, 225)",
+                        "name": "number",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Instructor name (URL encoded)",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of instructors",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.InstructorResponse"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No instructors found",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/rest/outlines": {
+            "get": {
+                "description": "Retrieves course outlines, optionally filtered by department and/or course number",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Outlines"
+                ],
+                "summary": "Get course outlines",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Department code (e.g., cmpt, math)",
+                        "name": "dept",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Course number (e.g., 120, 225)",
+                        "name": "number",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of course outlines",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.CourseOutline"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No outlines found for the specified criteria",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/rest/reviews": {
+            "get": {
+                "description": "Returns summary review data for all professors from reviews.json",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Get all reviews overview",
+                "responses": {
+                    "200": {
+                        "description": "List of professor summaries",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.ProfessorSummary"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/rest/reviews/courses/{course_code}": {
+            "get": {
+                "description": "Retrieves precomputed review data for a specific course code",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Get course reviews",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Course code (e.g., CMPT353, BUS251)",
+                        "name": "course_code",
+                        "in": "path"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Course review data",
+                        "schema": {
+                            "$ref": "#/definitions/model.CourseReviewData"
+                        }
+                    },
+                    "404": {
+                        "description": "Course not found",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/rest/reviews/instructors/{instructor_name}": {
+            "get": {
+                "description": "Retrieves detailed review data for a specific instructor by name",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Get instructor reviews",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Instructor name (e.g., Angela_Lin, Angela Lin)",
+                        "name": "instructor_name",
+                        "in": "path"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Instructor review data",
+                        "schema": {
+                            "$ref": "#/definitions/model.InstructorReviewData"
+                        }
+                    },
+                    "404": {
+                        "description": "Instructor not found",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/rest/sections": {
+            "get": {
+                "description": "Retrieves course sections for a specific year and term, optionally filtered by department and/or course number",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sections"
+                ],
+                "summary": "Get sections",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Year and term in format YYYY-Term (e.g., 2024-spring)",
+                        "name": "term",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Department code (e.g., cmpt, math)",
+                        "name": "dept",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Course number (e.g., 120, 225)",
+                        "name": "number",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of sections",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.CourseWithSectionDetails"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid year-term format or query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "No sections found for the specified criteria",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/main.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "main.ErrorResponse": {
+            "description": "Error information",
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "main.HealthResponse": {
+            "description": "Health check status information",
+            "type": "object",
+            "properties": {
+                "lastDataUpdate": {
+                    "type": "string",
+                    "example": "2025-06-17T07:40:46Z"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "ok"
+                },
+                "version": {
+                    "type": "string",
+                    "example": "1.0.0"
+                }
+            }
+        },
+        "model.CourseOffering": {
+            "description": "Course offering information for a specific term",
+            "type": "object",
+            "properties": {
+                "instructors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "John Doe",
+                        "Jane Smith"
+                    ]
+                },
+                "term": {
+                    "type": "string",
+                    "example": "Fall 2024"
+                }
+            }
+        },
+        "model.CourseOutline": {
+            "description": "Course outline information including general details and offerings",
+            "type": "object",
+            "properties": {
+                "corequisites": {
+                    "type": "string",
+                    "example": ""
+                },
+                "degreeLevel": {
+                    "type": "string",
+                    "example": "UGRD"
+                },
+                "deliveryMethod": {
+                    "type": "string",
+                    "example": "In Person"
+                },
+                "dept": {
+                    "type": "string",
+                    "example": "CMPT"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Introduction to a variety of practical and important data structures and methods..."
+                },
+                "designation": {
+                    "type": "string",
+                    "example": "Quantitative"
+                },
+                "notes": {
+                    "type": "string",
+                    "example": ""
+                },
+                "number": {
+                    "type": "string",
+                    "example": "225"
+                },
+                "offerings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.CourseOffering"
+                    }
+                },
+                "prerequisites": {
+                    "type": "string",
+                    "example": "(MACM 101 and (CMPT 125, CMPT 129 or CMPT 135)) or (ENSC 251 and ENSC 252), all with a minimum grade of C-."
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Data Structures and Programming"
+                },
+                "units": {
+                    "type": "string",
+                    "example": "3"
+                }
+            }
+        },
+        "model.CourseReviewData": {
+            "description": "Course review data aggregated from instructors",
+            "type": "object",
+            "properties": {
+                "course_code": {
+                    "type": "string",
+                    "example": "BUS251"
+                },
+                "instructors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.InstructorSummary"
+                    }
+                },
+                "total_reviews": {
+                    "type": "integer",
+                    "example": 25
+                }
+            }
+        },
+        "model.CourseWithSectionDetails": {
+            "description": "Course with detailed section information",
+            "type": "object",
+            "properties": {
+                "dept": {
+                    "type": "string",
+                    "example": "CMPT"
+                },
+                "number": {
+                    "type": "string",
+                    "example": "225"
+                },
+                "sections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.SectionDetail"
+                    }
+                },
+                "term": {
+                    "type": "string",
+                    "example": "Fall 2024"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Data Structure and Algorithms"
+                },
+                "units": {
+                    "type": "string",
+                    "example": "3"
+                }
+            }
+        },
+        "model.Instructor": {
+            "description": "Instructor information",
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "john_doe@sfu.ca"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "John Doe"
+                }
+            }
+        },
+        "model.InstructorOffering": {
+            "description": "Instructor offering information",
+            "type": "object",
+            "properties": {
+                "dept": {
+                    "type": "string",
+                    "example": "CMPT"
+                },
+                "number": {
+                    "type": "string",
+                    "example": "225"
+                },
+                "term": {
+                    "type": "string",
+                    "example": "Fall 2024"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Data Structures and Algorithms"
+                }
+            }
+        },
+        "model.InstructorResponse": {
+            "description": "Instructor information",
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "John Doe"
+                },
+                "offerings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.InstructorOffering"
+                    }
+                }
+            }
+        },
+        "model.InstructorReviewData": {
+            "description": "Instructor review data from RateMyProfessors",
+            "type": "object",
+            "properties": {
+                "department": {
+                    "type": "string",
+                    "example": "Accounting department"
+                },
+                "difficulty_level": {
+                    "type": "string",
+                    "example": "3.5"
+                },
+                "overall_rating": {
+                    "type": "string",
+                    "example": "4.2"
+                },
+                "professor_id": {
+                    "type": "string",
+                    "example": "2326813"
+                },
+                "professor_name": {
+                    "type": "string",
+                    "example": "Angela Lin"
+                },
+                "reviews": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Review"
+                    }
+                },
+                "total_ratings": {
+                    "type": "string",
+                    "example": "13"
+                },
+                "would_take_again": {
+                    "type": "string",
+                    "example": "85"
+                }
+            }
+        },
+        "model.InstructorSummary": {
+            "description": "Summary information for an instructor",
+            "type": "object",
+            "properties": {
+                "avg_difficulty": {
+                    "type": "number",
+                    "example": 3.5
+                },
+                "avg_rating": {
+                    "type": "number",
+                    "example": 4.2
+                },
+                "department": {
+                    "type": "string",
+                    "example": "Accounting"
+                },
+                "professor_id": {
+                    "type": "string",
+                    "example": "2326813"
+                },
+                "professor_name": {
+                    "type": "string",
+                    "example": "Angela Lin"
+                },
+                "review_count": {
+                    "type": "integer",
+                    "example": 13
+                },
+                "reviews": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Review"
+                    }
+                },
+                "would_take_again": {
+                    "type": "string",
+                    "example": "85%"
+                }
+            }
+        },
+        "model.ProfessorSummary": {
+            "description": "Summary review information for a professor from reviews.json",
+            "type": "object",
+            "properties": {
+                "Department": {
+                    "type": "string",
+                    "example": "Gender Studies"
+                },
+                "Difficulty": {
+                    "type": "string",
+                    "example": "3.6"
+                },
+                "Name": {
+                    "type": "string",
+                    "example": "Carman Fung"
+                },
+                "Quality": {
+                    "type": "string",
+                    "example": "3.1"
+                },
+                "Ratings": {
+                    "type": "string",
+                    "example": "14"
+                },
+                "URL": {
+                    "type": "string",
+                    "example": "https://www.ratemyprofessors.com/professor/2865715"
+                },
+                "WouldTakeAgain": {
+                    "type": "string",
+                    "example": "50%"
+                }
+            }
+        },
+        "model.Review": {
+            "description": "Detailed review information",
+            "type": "object",
+            "properties": {
+                "course_code": {
+                    "type": "string",
+                    "example": "BUS251"
+                },
+                "date": {
+                    "type": "string",
+                    "example": "Sep 1st, 2020"
+                },
+                "difficulty": {
+                    "type": "number",
+                    "example": 3
+                },
+                "helpful": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "metadata": {
+                    "$ref": "#/definitions/model.ReviewMetadata"
+                },
+                "not_helpful": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "rating": {
+                    "type": "number",
+                    "example": 4
+                },
+                "review_msg": {
+                    "type": "string",
+                    "example": "Great professor!"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "clear grading criteria",
+                        "participation matters"
+                    ]
+                }
+            }
+        },
+        "model.ReviewMetadata": {
+            "description": "Review metadata information",
+            "type": "object",
+            "properties": {
+                "Attendance": {
+                    "type": "string",
+                    "example": "Mandatory"
+                },
+                "For Credit": {
+                    "type": "string",
+                    "example": "Yes"
+                },
+                "Grade": {
+                    "type": "string",
+                    "example": "A"
+                },
+                "Online Class": {
+                    "type": "string",
+                    "example": "Yes"
+                },
+                "Textbook": {
+                    "type": "string",
+                    "example": "Yes"
+                },
+                "Would Take Again": {
+                    "type": "string",
+                    "example": "Yes"
+                }
+            }
+        },
+        "model.SectionDetail": {
+            "description": "Detailed information about a course section",
+            "type": "object",
+            "properties": {
+                "classNumber": {
+                    "type": "string",
+                    "example": "6327"
+                },
+                "deliveryMethod": {
+                    "type": "string",
+                    "example": "In Person"
+                },
+                "instructors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Instructor"
+                    }
+                },
+                "schedules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.SectionSchedule"
+                    }
+                },
+                "section": {
+                    "type": "string",
+                    "example": "D100"
+                }
+            }
+        },
+        "model.SectionSchedule": {
+            "description": "Schedule information for a section",
+            "type": "object",
+            "properties": {
+                "campus": {
+                    "type": "string",
+                    "example": "Burnaby"
+                },
+                "days": {
+                    "type": "string",
+                    "example": "Mo,We,Fr"
+                },
+                "endDate": {
+                    "type": "string",
+                    "example": "2024-12-06"
+                },
+                "endTime": {
+                    "type": "string",
+                    "example": "11:20"
+                },
+                "sectionCode": {
+                    "type": "string",
+                    "example": "LEC"
+                },
+                "startDate": {
+                    "type": "string",
+                    "example": "2024-09-03"
+                },
+                "startTime": {
+                    "type": "string",
+                    "example": "10:30"
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "description": "Health endpoints for monitoring API status and availability",
+            "name": "Health"
+        },
+        {
+            "description": "Outline endpoints for retrieving course outlines, including its offerings",
+            "name": "Outlines"
+        },
+        {
+            "description": "Section endpoints for retrieving section info, including its schedules and instructor(s)",
+            "name": "Sections"
+        }
+    ]
+}
