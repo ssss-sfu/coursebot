@@ -3,7 +3,7 @@
 
 A Discord Bot to show information about SFU courses.
 
-Can either both '!' prefix command and discord built-in / commands.
+Works with both '!' prefix commands and discord built-in / commands.
 
 [Invite this bot to Server](https://discord.com/oauth2/authorize?client_id=1429023672772853841&permissions=2147503104&integration_type=0&scope=bot+applications.commands)
 ## Usage/Examples
