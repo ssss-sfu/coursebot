@@ -5,6 +5,7 @@ from typing import Optional
 import os  # HTTP client for making API requests
 import http.client
 import json
+import re
 
 load_dotenv()  # Load environment variables from .env file
 discord_token = os.getenv('DISCORD_TOKEN')
@@ -31,9 +32,15 @@ async def on_ready():
 # need to validate entered parameters... if the course doesnt exist, return an error message etc.
 
 @bot.hybrid_command(name='courseinfo', with_app_command=True, description="Get detailed info about a course")
-async def get_outlines(ctx: commands.Context, subject: str, course_number: int):
+async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
+    # Considering courses that have alphanumeric course numbers (e.g., "105W")
+    number = re.fullmatch(r'(\d+)([A-Za-z]*)', course_number.strio())
+    if not number:
+        await ctx.send("Invalid course number format. Please use a format like '101' or '105W'.")
+        return
+    raw_number = course_number.strip()
     # connects to SFUCourses API to get outlines for requested course
-    conn.request("GET", f"/v1/rest/outlines?dept={subject}&number={course_number}")
+    conn.request("GET", f"/v1/rest/outlines?dept={subject}&number={raw_number}")
     # stores response from API
     response = conn.getresponse()
     
