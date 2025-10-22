@@ -31,7 +31,7 @@ async def on_ready():
 #       or check the course API to see what parameters are accepted
 # need to validate entered parameters... if the course doesnt exist, return an error message etc.
 
-@bot.hybrid_command(name='courseinfo2', with_app_command=True, description="Get detailed info about a course")
+@bot.hybrid_command(name='course', with_app_command=True, description="Get detailed info about a course")
 async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
     # Considering courses that have alphanumeric course numbers (e.g., "105W")
     number = re.fullmatch(r'(\d+)([A-Za-z]*)', course_number.strip())
