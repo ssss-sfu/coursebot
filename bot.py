@@ -180,7 +180,7 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
             for embed in embeds[:10]:
                 await ctx.send(embed=embed)
         else:
-            # Also put "no instructors found" in an embed
+            # No instructors found
             embed = discord.Embed(
                 title="No Instructors Found",
                 description=f"No instructors found with the name '{instructor_name}'",

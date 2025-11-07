@@ -8,12 +8,50 @@ Works with both '!' prefix commands and discord built-in / commands.
 [Invite this bot to Server](https://discord.com/oauth2/authorize?client_id=1429023672772853841&permissions=2147503104&integration_type=0&scope=bot+applications.commands)
 ## Usage/Examples
 
-/course {subject: str} {course_number: str}
+### Course Command
+The !course command retrieves detailed informatio nabout a specific course.
 
-examples: 
+**Usage:**
+```
+/course <subject: str> <course_number: str>
+```
+**Parameters:**
+- `subject`: The department code (e.g., `cmpt`, `math`, `engl`)
+- `course_number`: The course number (e.g., `120`, `225`, `105w`)
+
+**Examples:**
+```
 - /course CMPT 201
 - /course CMPT 105w
 - /course MACM 201
+```
+
+### Offerings Command
+The `!offerings` command retrieves course offerings taught by a specific instructor.
+
+**Usage:**
+```
+!offerings <instructor_name: str> <term: str>
+```
+
+**Parameters:**
+- `instructor_name`: The instructor's full name (use quotes for names with spaces)
+- `term` (optional): Filter by specific term (e.g., `fall`, `spring 2024`, `summer`)
+
+**Examples:**
+```
+!instructor "Brian Fraser"
+!instructor "John Smith" fall
+!instructor "Jane Doe" "spring 2024"
+!instructor Edgar summer
+```
+
+**Notes:**
+- If multiple instructors match your search, the bot will show a list and ask you to be more specific
+- Use quotation marks around names with spaces for exact matches
+- Term filtering is case-insensitive and supports partial matches
+- Without a term filter, all course offerings for the instructor will be shown
+
 ## Acknowledgements
 
  - [SFU COURSES API](https://api.sfucourses.com/) by Brian Rahadi. This is where I get my course info from.
