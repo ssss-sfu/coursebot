@@ -11,3 +11,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 #defines default command to run when container starts
 CMD ["python", "bot.py"]
+ENV PYTHONUNBUFFERED=1
