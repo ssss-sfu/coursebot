@@ -13,6 +13,9 @@ def parse_term_year(term_code: str):
     match = re.search(r'(\d{4})', term_code)
     return int(match.group(1)) if match else 0
 
+#helper function to check the command type
+def get_command_type(ctx: commands.Context) -> str:
+    return 'slash' if ctx.interaction else 'prefix'
 
 load_dotenv()  # Load environment variables from .env file
 discord_token = os.getenv('DISCORD_TOKEN')
@@ -130,12 +133,11 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
                     value=instructor_list,
                     inline=False
                 )
-                embed.add_field(
-                    name="How to fix:",
-                    value=f'Use quotes around the full name:\n`!instructor "{instructor_names[0]}"`',
-                    inline=False
-                )
-                embed.set_footer(text="If using /instructor, retry with instructor's full name.")
+                command_type = get_command_type(ctx)
+                if command_type == 'slash':
+                    embed.set_footer(text="Tip: If using /instructor, retry with instructor's full name.")
+                else:
+                    embed.set_footer(text="Tip: If using !instructor, use quotes around the full name.")
                 await ctx.send(embed=embed)
                 return
             embeds = []
@@ -159,6 +161,7 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
                             value="• Check term spelling\n• Omit term to see all offerings\n",
                             inline=False
                         )
+                        embed.set_footer(text="Tip: Check term spelling or omit term to see all offerings.")
                         embeds.append(embed)
                         continue
                 else:
@@ -186,11 +189,7 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
                 description=f"No instructors found with the name '{instructor_name}'",
                 color=discord.Color.red()
             )
-            embed.add_field(
-                name="Try:",
-                value="• Check spelling\n• Use full name\n",
-                inline=False
-            )
+            embed.set_footer(text="Tip: Check your spelling or try using instructor's full name.")
             await ctx.send(embed=embed)
     elif response.status == 404:
         embed = discord.Embed(
