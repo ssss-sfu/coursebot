@@ -2,11 +2,14 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 from typing import Optional
-import os  # HTTP client for making API requests
+import os 
 import http.client
 import json
 import re
 import urllib.parse
+# health check imports
+import asyncio
+from aiohttp import web
 
 # helper function to parse term year
 def parse_term_year(term_code: str):
@@ -26,6 +29,19 @@ intents = discord.Intents.default()
 intents.message_content = True # Enable message content intent
 # Registers an event. This event is called when the bot has switched from offline to online.
 bot = commands.Bot(command_prefix='!', intents=intents, case_insensitive=True) # command handling
+
+#async health check
+async def health_check(request):
+    return web.Response(text="ok", status=200)
+
+async def run_health_server():
+    app = web.Application()
+    app.router.add_get('/health', health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
+
 
 @bot.event
 async def on_ready():
@@ -206,4 +222,14 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
         )
         await ctx.send(embed=embed)
 
-bot.run(discord_token)
+async def main():
+    # run the health server
+    await run_health_server()
+    print("Health check server is running on port 8080")
+    # wait a moment for the server to start
+    await asyncio.sleep(2)
+    async with bot:
+        await bot.start(discord_token)
+
+if __name__ == '__main__':
+    asyncio.run(main())

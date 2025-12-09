@@ -10,5 +10,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # copies al lfiles from project folder into containers /app directory
 COPY . .
 #defines default command to run when container starts
+
+EXPOSE 8080
+
 CMD ["python", "bot.py"]
 ENV PYTHONUNBUFFERED=1
