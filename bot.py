@@ -22,6 +22,10 @@ def get_command_type(ctx: commands.Context) -> str:
 
 load_dotenv()  # Load environment variables from .env file
 discord_token = os.getenv('DISCORD_TOKEN')
+
+if not discord_token:
+    print("ERROR: DISCORD_TOKEN environment variable is not set!")
+    
 conn = http.client.HTTPSConnection("api.sfucourses.com")
 
 # Creates an instance of a client. This is our conneciton to discord.
@@ -36,11 +40,13 @@ async def health_check(request):
 
 async def run_health_server():
     app = web.Application()
+    app.router.add_get('/', health_check)  # Root path for AWS App Runner default health check
     app.router.add_get('/health', health_check)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', 8080)
     await site.start()
+    print("Health check server started on port 8080")
 
 
 @bot.event
@@ -223,11 +229,10 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
         await ctx.send(embed=embed)
 
 async def main():
-    # run the health server
+    # run the health server FIRST so App Runner health checks pass
     await run_health_server()
     print("Health check server is running on port 8080")
-    # wait a moment for the server to start
-    await asyncio.sleep(2)
+    # Start the Discord bot
     async with bot:
         await bot.start(discord_token)
 
