@@ -13,18 +13,18 @@ from aiohttp import web
 
 # helper function to parse term year
 def parse_term_year(term_code: str):
-    match = re.search(r'(\d{4})', term_code)
-    return int(match.group(1)) if match else 0
+  match = re.search(r'(\d{4})', term_code)
+  return int(match.group(1)) if match else 0
 
 #helper function to check the command type
 def get_command_type(ctx: commands.Context) -> str:
-    return 'slash' if ctx.interaction else 'prefix'
+  return 'slash' if ctx.interaction else 'prefix'
 
 load_dotenv()  # Load environment variables from .env file
 discord_token = os.getenv('DISCORD_TOKEN')
 
 if not discord_token:
-    print("ERROR: DISCORD_TOKEN environment variable is not set!")
+  print("ERROR: DISCORD_TOKEN environment variable is not set!")
     
 conn = http.client.HTTPSConnection("api.sfucourses.com")
 
@@ -36,17 +36,17 @@ bot = commands.Bot(command_prefix='!', intents=intents, case_insensitive=True) #
 
 #async health check
 async def health_check(request):
-    return web.Response(text="ok", status=200)
+  return web.Response(text="ok", status=200)
 
 async def run_health_server():
-    app = web.Application()
-    app.router.add_get('/', health_check)  # Root path for AWS App Runner default health check
-    app.router.add_get('/health', health_check)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8080)
-    await site.start()
-    print("Health check server started on port 8080")
+  app = web.Application()
+  app.router.add_get('/', health_check)  # Root path for AWS App Runner default health check
+  app.router.add_get('/health', health_check)
+  runner = web.AppRunner(app)
+  await runner.setup()
+  site = web.TCPSite(runner, '0.0.0.0', 8080)
+  await site.start()
+  print("Health check server started on port 8080")
 
 
 @bot.event
@@ -107,9 +107,9 @@ async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
         instructors = offering.get('instructors', [])
         if instructors:
           instructor_str = ", ".join(instructors)
-          offerings_list.append(f"**{term}** - Instructors: {instructor_str}")
+          offerings_list.append(f"• **{term}** - Instructors: {instructor_str}")
         else:
-          offerings_list.append(f"**{term} - No instructors listed**")
+          offerings_list.append(f"• **{term} - No instructors listed**")
       embed.add_field(
         name="Recent Offerings",
         value="\n".join(offerings_list),
@@ -300,14 +300,88 @@ async def get_section(ctx: commands.Context, year: int, term: str, dept: str, nu
     await ctx.send(embed=embed)
   return
 
+# Reviews Command
+# Returns a summary of review data for specified Instructor
+# Parameters: Instructor full name
+@bot.hybrid_command(name='reviews', with_app_command=True, description="Get reviews for a specific instructor")
+async def get_reviews(ctx:commands.Context, instructor_name: str):
+  conn.request("GET", f"/v1/rest/reviews/instructors") # Grabs data for ALL instructors
+  response=conn.getresponse()
+
+  if response.status==200:
+    #success
+    data=json.loads(response.read().decode('utf-8'))
+    if data:
+      # Search for matching professor (case-insensitive)
+      found_prof = None
+      for summary in data:
+        prof_name = summary.get('Name', '')
+        if instructor_name.lower() in prof_name.lower():
+          found_prof = summary
+          break
+      
+      if found_prof:
+        rating = float(found_prof.get('Quality', '0'))
+        difficulty = found_prof.get('Difficulty', 'N/A')
+        ratings_count = found_prof.get('Ratings', 'N/A')
+        would_take_again = found_prof.get('WouldTakeAgain', 'N/A')
+        department = found_prof.get('Department', 'Unknown')
+        url = found_prof.get('URL', '')
+
+        embed = discord.Embed(
+          title=f"Reviews for {found_prof.get('Name', instructor_name)}",
+          description=f"Professor in the **{department}** department at SFU.",
+          color=discord.Color.purple()
+        )
+        embed.add_field(
+          name="Information",
+          value=f"• Rating: {rating}/5\n"
+                f"• Difficulty: {difficulty}/5\n"
+                f"• Ratings: {ratings_count}\n"
+                f"• {would_take_again} of students Would Take Again\n",
+          inline=False
+        )
+        if url:
+          embed.set_footer(text=f"Read reviews: {url}")
+        await ctx.send(embed=embed)
+      else:
+        # No matching professor found
+        embed = discord.Embed(
+          title="No Reviews Found",
+          description=f"No reviews found for '{instructor_name}'.",
+          color=discord.Color.red()
+        )
+        embed.set_footer(text="Tip: Check spelling or try the instructor's full name.")
+        await ctx.send(embed=embed)
+    else:
+      embed = discord.Embed(
+        title="No Data Available",
+        description="Could not retrieve instructor reviews at this time.",
+        color=discord.Color.red()
+      )
+      await ctx.send(embed=embed)
+  elif response.status == 500:
+    embed = discord.Embed(
+      title="Server Error",
+      description=f"Internal Server Error: {response.status}",
+      color=discord.Color.red()
+    )
+    await ctx.send(embed=embed)
+  else:
+    embed = discord.Embed(
+      title="Error",
+      description=f"Failed to fetch reviews: {response.status}",
+      color=discord.Color.red()
+    )
+    await ctx.send(embed=embed)
 
 async def main():
-    # run the health server FIRST so App Runner health checks pass
-    await run_health_server()
-    print("Health check server is running on port 8080")
-    # Start the Discord bot
-    async with bot:
-        await bot.start(discord_token)
+  # run the health server FIRST so App Runner health checks pass
+  await run_health_server()
+  print("Health check server is running on port 8080")
+  # Start the Discord bot
+  async with bot:
+    await bot.start(discord_token)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+  asyncio.run(main())
