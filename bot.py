@@ -316,7 +316,7 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
       found_prof = None
       for summary in data:
         prof_name = summary.get('Name', '')
-        if instructor_name.lower() in prof_name.lower():
+        if instructor_name.lower() == prof_name.lower():
           found_prof = summary
           break
       
@@ -331,6 +331,7 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
         embed = discord.Embed(
           title=f"Reviews for {found_prof.get('Name', instructor_name)}",
           description=f"Professor in the **{department}** department at SFU.",
+          url=url if url else None,
           color=discord.Color.purple()
         )
         embed.add_field(
@@ -341,8 +342,6 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
                 f"• {would_take_again} of students Would Take Again\n",
           inline=False
         )
-        if url:
-          embed.set_footer(text=f"Read reviews: {url}")
         await ctx.send(embed=embed)
       else:
         # No matching professor found
