@@ -163,48 +163,48 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
           embed.set_footer(text="Tip: If using !instructor, use quotes around the full name.")
         await ctx.send(embed=embed)
         return
-    embeds = []
-    for instructor in data:
-      instructor_name = instructor.get('name', 'Unknown')
-      all_offerings = instructor.get('offerings', [])
-      if term:
-          filtered_offerings = [
-            offering for offering in all_offerings
-            if term.lower() in offering.get('term', '').lower()
-          ]
-          show_offerings = filtered_offerings
-          if not show_offerings:
-            embed = discord.Embed(
-              title="No Offerings Found for Specified Term",
-              description=f"No offerings found for {instructor_name} in term '{term}'.",
-              color=discord.Color.red()
-            )
-            embed.add_field(
-              name="Try:",
-              value="• Check term spelling\n• Omit term to see all offerings\n",
-              inline=False
-            )
-            embed.set_footer(text="Tip: Check term spelling or omit term to see all offerings.")
-            embeds.append(embed)
-            continue
-      else:
-        show_offerings = all_offerings
-      offerings_list = [] 
-      for offering in show_offerings:
-        dept = offering.get('dept', 'N/A')
-        number = offering.get('number', 'N/A')
-        term = offering.get('term', 'N/A')
-        title = offering.get('title', 'N/A')
-        offerings_list.append(f"**{dept} {number}** - {title} ({term})")
-      
-      embed = discord.Embed(
-        title=f"Courses taught by {instructor_name}",
-        description="\n".join(offerings_list) if offerings_list else "No offerings found.",
-        color=discord.Color.green()
-      )
-      embeds.append(embed)
-    for embed in embeds[:10]:
-        await ctx.send(embed=embed)
+      embeds = []
+      for instructor in data:
+        instructor_name = instructor.get('name', 'Unknown')
+        all_offerings = instructor.get('offerings', [])
+        if term:
+            filtered_offerings = [
+              offering for offering in all_offerings
+              if term.lower() in offering.get('term', '').lower()
+            ]
+            show_offerings = filtered_offerings
+            if not show_offerings:
+              embed = discord.Embed(
+                title="No Offerings Found for Specified Term",
+                description=f"No offerings found for {instructor_name} in term '{term}'.",
+                color=discord.Color.red()
+              )
+              embed.add_field(
+                name="Try:",
+                value="• Check term spelling\n• Omit term to see all offerings\n",
+                inline=False
+              )
+              embed.set_footer(text="Tip: Check term spelling or omit term to see all offerings.")
+              embeds.append(embed)
+              continue
+        else:
+          show_offerings = all_offerings
+        offerings_list = [] 
+        for offering in show_offerings:
+          dept = offering.get('dept', 'N/A')
+          number = offering.get('number', 'N/A')
+          term = offering.get('term', 'N/A')
+          title = offering.get('title', 'N/A')
+          offerings_list.append(f"**{dept} {number}** - {title} ({term})")
+        
+        embed = discord.Embed(
+          title=f"Courses taught by {instructor_name}",
+          description="\n".join(offerings_list) if offerings_list else "No offerings found.",
+          color=discord.Color.green()
+        )
+        embeds.append(embed)
+      for embed in embeds[:10]:
+          await ctx.send(embed=embed)
     else:
       # No instructors found
       embed = discord.Embed(
