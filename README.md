@@ -1,4 +1,3 @@
-
 # SFU CourseBot
 
 A Discord Bot to show information about SFU courses.
@@ -51,6 +50,55 @@ The `!offerings` command retrieves course offerings taught by a specific instruc
 - Use quotation marks around names with spaces for exact matches
 - Term filtering is case-insensitive and supports partial matches
 - Without a term filter, all course offerings for the instructor will be shown
+
+### Sections Command
+The `!sections` command retrieves all available sections for a specific course in a given term.
+
+**Usage:**
+```
+/sections <year:int> <term: str> <dept: str> <number: int>
+```
+
+**Parameters:**
+- `year`: The year to search (YYYY) (e.g., `2026`, `2025`, `2019`)
+- `term`: The term/season to search in (e.g., `fall`, `spring`, `summer`)
+- `dept`: The department (e.g., `cmpt`, `math`, `engl`)
+- `number`: The course number (e.g., `120`, `225`, `105w`)
+
+**Examples:**
+```
+/sections 2024 fall CMPT 120 
+/sections 2020 spring MATH 151
+/sections 2026 summer ENGL 199 
+```
+
+**Notes:**
+- Shows section details including instructor, schedule, and enrollment status
+- Term is case-insensitive
+- Parameters may require quotations
+
+### Reviews Command
+The `!reviews` command retrieves instructor reviews and ratings.
+
+**Usage:**
+```
+/reviews <instructor_name: str>
+```
+
+**Parameters:**
+- `instructor_name`: The instructor's full name (use quotes for names with spaces)
+
+**Examples:**
+```
+!reviews "Brian Fraser"
+!reviews "John Smith"
+/reviews Edgar
+```
+
+**Notes:**
+- Displays ratings and review information for the specified instructor
+- If multiple instructors match your search, the bot will show a list and ask you to be more specific
+- Use quotation marks around names with spaces for exact matches
 
 ## Acknowledgements
 
