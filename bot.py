@@ -83,13 +83,15 @@ async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
   if response.status == 200:
     outlines = response.read()
     if outlines == b'[]':
-      await ctx.send(f"This course does not exist. Please try again.")
+      await ctx.send(f"No course data found for {subject.upper()} {course_number}. Please try again.")
       return
     data = json.loads(outlines.decode('utf-8'))
     if not data:
-      if course_number.isdigit(67):
-        ctx.send("67")
-      await ctx.send(f"No course data found for {subject} {course_number}.")
+      if course_number.strip() == "67":
+        await ctx.send("67")
+        return
+      await ctx.send(f"No course data found for {subject.upper()} {course_number}.")
+      return
     course = data[0]
     embed = discord.Embed(
       title=f"{course['dept']} {course['number']}: {course['title']}",
