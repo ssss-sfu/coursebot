@@ -81,6 +81,7 @@ class TestSectionCommand:
   def test_instructor_string_formatting(self, mock_section_response_success):
     """Test the instructor list to string conversion"""
     sections = mock_section_response_success[0]['sections']
+    instrs_str = ''
     for section in sections:
       instrs = section.get('instructors', [])
       instrs_str = ", ".join(instrs) if instrs else "TBA"      
