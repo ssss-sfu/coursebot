@@ -484,7 +484,6 @@ async def on_voice_state_update(
   try:
     if is_joined:
       print(f"{member.id} joined {new_channel_id} @ {now}")
-      user_joined_at[member.id] = now
 
       # Prune join history and check frequency limit
       join_history[member.id] = prune_timestamps(
@@ -525,6 +524,8 @@ async def on_voice_state_update(
         )
         await send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, moderation_message)
         return
+
+      user_joined_at[member.id] = now
 
       if target_role not in member.roles:
         await member.add_roles(target_role)
