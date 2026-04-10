@@ -113,3 +113,15 @@ The `!reviews` command retrieves instructor reviews and ratings.
 
 If you have any feedback or questions, please reach out to me at meharsaini@hotmail.com.
 
+## Study Time Railguards
+
+### Setup
+
+#### Roles
+
+1. Create a Role to automatically assign to users for Study Time
+2. Ensure the bot role is above the Study Time assigned role
+
+#### Environment
+
+See `.env.template`
