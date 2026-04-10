@@ -33,12 +33,38 @@ STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS = int(os.getenv("STUDY_TIME_VC_JOIN_LIMI
 # visits shorter than STUDY_TIME_VC_SHORT_STAY_SECONDS within the tracking window,
 # they are blocked from receiving the role.
 STUDY_TIME_VC_SHORT_STAY_SECONDS = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_SECONDS", "30"))
-STUDY_TIME_VC_SHORT_STAY_THRESHOLD = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_THRESHOLD", "5"))
+STUDY_TIME_VC_SHORT_STAY_THRESHOLD_SECONDS = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_THRESHOLD", "5"))
 STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS", "120"))
 CLEANUP_INTERVAL_SECONDS = 600
 
 if not all([STUDY_TIME_VC_CHANNEL_ID, STUDY_TIME_ROLE_NAME, MODERATION_REPORT_VC_CHANNEL_ID]):
     raise RuntimeError("Invalid .env config")
+
+_study_time_seconds_vars = {
+    "STUDY_TIME_VC_JOIN_LIMIT_COUNT": STUDY_TIME_VC_JOIN_LIMIT_COUNT,
+    "STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS": STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS,
+    "STUDY_TIME_VC_SHORT_STAY_SECONDS": STUDY_TIME_VC_SHORT_STAY_SECONDS,
+    "STUDY_TIME_VC_SHORT_STAY_THRESHOLD": STUDY_TIME_VC_SHORT_STAY_THRESHOLD_SECONDS,
+    "STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS": STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS,
+}
+for _name, _value in _study_time_seconds_vars.items():
+    if _value <= 0:
+        raise RuntimeError(f"Invalid .env config: {_name} must be a positive integer, got {_value}")
+
+if STUDY_TIME_VC_SHORT_STAY_SECONDS >= STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS:
+    raise RuntimeError(
+        f"Invalid .env config: STUDY_TIME_VC_SHORT_STAY_SECONDS ({STUDY_TIME_VC_SHORT_STAY_SECONDS}) "
+        f"must be less than STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS ({STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS})"
+    )
+
+if STUDY_TIME_VC_JOIN_LIMIT_COUNT >= STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS:
+    raise RuntimeError(
+        f"Invalid .env config: STUDY_TIME_VC_JOIN_LIMIT_COUNT ({STUDY_TIME_VC_JOIN_LIMIT_COUNT}) "
+        f"must be less than STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS ({STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS})"
+    )
+
+STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA = timedelta(seconds=STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS)
+STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA = timedelta(seconds=STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS)
 
 
 # helper function to parse term year
@@ -440,27 +466,34 @@ async def send_channel_message(client: discord.Client, channelId: int, message: 
 @tasks.loop(seconds=CLEANUP_INTERVAL_SECONDS)
 async def cleanup_stale_history():
   # Avoid DoS or other weird stuff
-  print('Running GC on Study Time railguards')
 
   now = datetime.now(timezone.utc)
-  join_window_start = now - timedelta(seconds=STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS)
-  short_stay_window_start = now - timedelta(seconds=STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS)
+  gc_message = f'[HEALTH] Running Study Time GC at {now}'
 
-  for user_id in list(join_history.keys()):
-    join_history[user_id] = prune_timestamps(join_history[user_id], join_window_start)
-    if not join_history[user_id]:
-      del join_history[user_id]
+  async def do_cleanup():
+    join_window_start = now - STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA
+    short_stay_window_start = now - STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA
 
-  for user_id in list(short_stay_history.keys()):
-    short_stay_history[user_id] = prune_timestamps(short_stay_history[user_id], short_stay_window_start)
-    if not short_stay_history[user_id]:
-      del short_stay_history[user_id]
+    for user_id in list(join_history.keys()):
+      join_history[user_id] = prune_timestamps(join_history[user_id], join_window_start)
+      if not join_history[user_id]:
+        del join_history[user_id]
 
-  # Clean up user_joined_at entries older than the largest window
-  stale_threshold = now - timedelta(seconds=max(STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS, STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS))
-  for user_id in list(user_joined_at.keys()):
-    if user_joined_at[user_id] < stale_threshold:
-      del user_joined_at[user_id]
+    for user_id in list(short_stay_history.keys()):
+      short_stay_history[user_id] = prune_timestamps(short_stay_history[user_id], short_stay_window_start)
+      if not short_stay_history[user_id]:
+        del short_stay_history[user_id]
+
+    # Clean up user_joined_at entries older than the largest window
+    stale_threshold = now - timedelta(seconds=max(STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS, STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS))
+    for user_id in list(user_joined_at.keys()):
+      if user_joined_at[user_id] < stale_threshold:
+        del user_joined_at[user_id]
+
+  await asyncio.gather(
+    send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, gc_message),
+    do_cleanup(),
+  )
 
 
 @bot.event
@@ -487,14 +520,14 @@ async def on_voice_state_update(
 
       # Prune join history and check frequency limit
       join_history[member.id] = prune_timestamps(
-        join_history[member.id], now - timedelta(seconds=STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS)
+        join_history[member.id], now - STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA
       )
 
       # Check join frequency limit before recording this join (AVOID DoS)
       if len(join_history[member.id]) >= STUDY_TIME_VC_JOIN_LIMIT_COUNT:
         oldest = join_history[member.id][0]
-        remaining = max(1, int((oldest + timedelta(seconds=STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS) - now).total_seconds()))
-        moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {remaining}s ({STUDY_TIME_VC_JOIN_LIMIT_COUNT} in {STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS}s to {new_channel_name})"
+        remaining = max(1, int((oldest + STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA - now).total_seconds()))
+        moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {format_eta(remaining)} ({STUDY_TIME_VC_JOIN_LIMIT_COUNT} in {STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS}s to {new_channel_name})"
 
         print(moderation_message)
         await send_dm(
@@ -509,12 +542,12 @@ async def on_voice_state_update(
 
       # Check short-stay abuse
       short_stay_history[member.id] = prune_timestamps(
-        short_stay_history[member.id], now - timedelta(seconds=STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS)
+        short_stay_history[member.id], now - STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA
       )
-      if len(short_stay_history[member.id]) >= STUDY_TIME_VC_SHORT_STAY_THRESHOLD:
+      if len(short_stay_history[member.id]) >= STUDY_TIME_VC_SHORT_STAY_THRESHOLD_SECONDS:
         oldest = short_stay_history[member.id][0]
-        remaining = max(1, int((oldest + timedelta(seconds=STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS) - now).total_seconds()))
-        moderation_message = f"{member.name} ({member.id}) flagged for short-stay abuse with timeout {remaining}s ({len(short_stay_history[member.id])} short visits to {new_channel_name})"
+        remaining = max(1, int((oldest + STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA - now).total_seconds()))
+        moderation_message = f"{member.name} ({member.id}) flagged for short-stay abuse with timeout {format_eta(remaining)} ({len(short_stay_history[member.id])} short visits to {new_channel_name})"
         
         print(moderation_message)
         await send_dm(
@@ -539,7 +572,7 @@ async def on_voice_state_update(
       if (short_stay_duration is not None) and (short_stay_duration < STUDY_TIME_VC_SHORT_STAY_SECONDS):
         print(f"{member.id} short stay: {short_stay_duration:.0f}s")
         short_stay_history[member.id] = prune_timestamps(
-          short_stay_history[member.id], now - timedelta(seconds=STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS)
+          short_stay_history[member.id], now - STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA
         )
         short_stay_history[member.id].append(now)
 
