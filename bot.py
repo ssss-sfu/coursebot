@@ -23,6 +23,7 @@ SETUP:
 """
 
 STUDY_TIME_VC_CHANNEL_ID = int(os.getenv("STUDY_TIME_VC_CHANNEL_ID", "0"))
+MODERATION_REPORT_VC_CHANNEL_ID = int(os.environ.get("MODERATION_REPORT_VC_CHANNEL_ID", "0"))
 STUDY_TIME_ROLE_NAME = os.getenv("STUDY_TIME_ROLE_NAME", "")
 
 STUDY_TIME_VC_JOIN_LIMIT_COUNT = int(os.getenv("STUDY_TIME_VC_JOIN_LIMIT_COUNT", "5"))
@@ -36,7 +37,7 @@ STUDY_TIME_VC_SHORT_STAY_THRESHOLD = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_THR
 STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS", "120"))
 CLEANUP_INTERVAL_SECONDS = 600
 
-if not all([STUDY_TIME_VC_CHANNEL_ID, STUDY_TIME_ROLE_NAME]):
+if not all([STUDY_TIME_VC_CHANNEL_ID, STUDY_TIME_ROLE_NAME, MODERATION_REPORT_VC_CHANNEL_ID]):
     raise RuntimeError("Invalid .env config")
 
 
@@ -428,6 +429,14 @@ async def send_dm(member: discord.Member, message: str):
     print(f'Encountered error sending message to user "{member.name}"')
 
 
+async def send_channel_message(client: discord.Client, channelId: int, message: str):
+    channel = client.get_channel(channelId)
+    if channel and type(channel) == discord.TextChannel:
+        await channel.send(message)
+    else:
+        print(f'Failed to send message to channel {channelId}')
+
+
 @tasks.loop(seconds=CLEANUP_INTERVAL_SECONDS)
 async def cleanup_stale_history():
   # Avoid DoS or other weird stuff
@@ -470,6 +479,7 @@ async def on_voice_state_update(
   old_channel_id = before.channel.id if before.channel else None
   is_joined = new_channel_id == STUDY_TIME_VC_CHANNEL_ID and old_channel_id != STUDY_TIME_VC_CHANNEL_ID
   is_left = old_channel_id == STUDY_TIME_VC_CHANNEL_ID and new_channel_id != STUDY_TIME_VC_CHANNEL_ID
+  new_channel_name = after.channel.name if after.channel else None
 
   try:
     if is_joined:
@@ -483,14 +493,17 @@ async def on_voice_state_update(
 
       # Check join frequency limit before recording this join (AVOID DoS)
       if len(join_history[member.id]) >= STUDY_TIME_VC_JOIN_LIMIT_COUNT:
-        print(f"{member.id} exceeded join limit ({STUDY_TIME_VC_JOIN_LIMIT_COUNT} in {STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS}s)")
         oldest = join_history[member.id][0]
         remaining = max(1, int((oldest + timedelta(seconds=STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS) - now).total_seconds()))
+        moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {remaining}s ({STUDY_TIME_VC_JOIN_LIMIT_COUNT} in {STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS}s to {new_channel_name})"
+
+        print(moderation_message)
         await send_dm(
           member,
           f"You are joining Study Time too frequently. "
           f"Please wait {format_eta(remaining)} before rejoining to have access to the chat.",
         )
+        await send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, moderation_message)
         return
 
       join_history[member.id].append(now)
@@ -500,14 +513,17 @@ async def on_voice_state_update(
         short_stay_history[member.id], now - timedelta(seconds=STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS)
       )
       if len(short_stay_history[member.id]) >= STUDY_TIME_VC_SHORT_STAY_THRESHOLD:
-        print(f"{member.id} flagged for short-stay abuse ({len(short_stay_history[member.id])} short visits)")
         oldest = short_stay_history[member.id][0]
         remaining = max(1, int((oldest + timedelta(seconds=STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS) - now).total_seconds()))
+        moderation_message = f"{member.name} ({member.id}) flagged for short-stay abuse with timeout {remaining}s ({len(short_stay_history[member.id])} short visits to {new_channel_name})"
+        
+        print(moderation_message)
         await send_dm(
           member,
           f"You have been joining Study Time for very short periods too often. "
           f"Please wait {format_eta(remaining)} before rejoining to have access to the chat.",
         )
+        await send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, moderation_message)
         return
 
       if target_role not in member.roles:
