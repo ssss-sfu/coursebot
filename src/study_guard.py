@@ -165,7 +165,8 @@ def setup(bot: discord.Client, config):
       removed_roles = 0
       for member in guild.members:
         try:
-          if member.get_role(study_time_role.id):
+          # only remove the study time role if they have the role and aren't currently in the Voice Channel
+          if member.get_role(study_time_role.id) and member not in study_time_vc.members:
             removed_roles += 1
             await member.remove_roles(study_time_role)
         except Exception as e:
@@ -175,8 +176,10 @@ def setup(bot: discord.Client, config):
       added_roles = 0
       for member in study_time_vc.members:
         try:
-          added_roles += 1
-          await member.add_roles(study_time_role)
+          # if the member already has the role, we can save API calls
+          if not member.get_role(study_time_role.id):
+            added_roles += 1
+            await member.add_roles(study_time_role)
         except Exception as e:
           print(e)
       
