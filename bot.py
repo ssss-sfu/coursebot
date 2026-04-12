@@ -32,6 +32,7 @@ conn = http.client.HTTPSConnection("api.sfucourses.com")
 # Creates an instance of a client. This is our conneciton to discord.
 intents = discord.Intents.default()
 intents.message_content = True # Enable message content intent
+intents.members = True # Enable members intent
 # Registers an event. This event is called when the bot has switched from offline to online.
 bot = commands.Bot(command_prefix='!', intents=intents, case_insensitive=True) # command handling
 
