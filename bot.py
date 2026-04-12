@@ -518,31 +518,30 @@ async def on_voice_state_update(
 
   try:
     if is_joined:
-      is_valid_join = False
+      print(f"{member.id} joined {new_channel_id} @ {now}")
+      is_rejected = False
 
-      try:
-        print(f"{member.id} joined {new_channel_id} @ {now}")
+      # Prune join history and check frequency limit
+      join_history[member.id] = prune_timestamps(
+        join_history[member.id], now - STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA
+      )
 
-        # Prune join history and check frequency limit
-        join_history[member.id] = prune_timestamps(
-          join_history[member.id], now - STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA
+      # Check join frequency limit before recording this join (AVOID DoS)
+      if len(join_history[member.id]) >= STUDY_TIME_VC_JOIN_LIMIT_COUNT:
+        oldest = join_history[member.id][0]
+        remaining = max(1, int((oldest + STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA - now).total_seconds()))
+        moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {format_eta(remaining)} ({STUDY_TIME_VC_JOIN_LIMIT_COUNT} in {STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS}s to {new_channel_name})"
+
+        print(moderation_message)
+        await send_dm(
+          member,
+          f"You are joining Study Time too frequently. "
+          f"Please wait {format_eta(remaining)} before rejoining to have access to the chat.",
         )
+        await send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, moderation_message)
+        is_rejected = True
 
-        # Check join frequency limit before recording this join (AVOID DoS)
-        if len(join_history[member.id]) >= STUDY_TIME_VC_JOIN_LIMIT_COUNT:
-          oldest = join_history[member.id][0]
-          remaining = max(1, int((oldest + STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA - now).total_seconds()))
-          moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {format_eta(remaining)} ({STUDY_TIME_VC_JOIN_LIMIT_COUNT} in {STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS}s to {new_channel_name})"
-
-          print(moderation_message)
-          await send_dm(
-            member,
-            f"You are joining Study Time too frequently. "
-            f"Please wait {format_eta(remaining)} before rejoining to have access to the chat.",
-          )
-          await send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, moderation_message)
-          return
-
+      if not is_rejected:
         join_history[member.id].append(now)
 
         # Check short-stay abuse
@@ -553,7 +552,7 @@ async def on_voice_state_update(
           oldest = short_stay_history[member.id][0]
           remaining = max(1, int((oldest + STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA - now).total_seconds()))
           moderation_message = f"{member.name} ({member.id}) flagged for short-stay abuse with timeout {format_eta(remaining)} ({len(short_stay_history[member.id])} short visits to {new_channel_name})"
-          
+
           print(moderation_message)
           await send_dm(
             member,
@@ -561,35 +560,32 @@ async def on_voice_state_update(
             f"Please wait {format_eta(remaining)} before rejoining to have access to the chat.",
           )
           await send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, moderation_message)
-          return
+          is_rejected = True
 
-        is_valid_join = True
+      if not is_rejected:
         user_joined_at[member.id] = now
-      finally:
         try:
-          if is_valid_join:
-            await member.add_roles(target_role)
+          await member.add_roles(target_role)
         except Exception as e:
           print(f"Failed to add role to {member.id}: {e}")
 
     elif is_left:
-      try:
-        print(f"{member.id} left {old_channel_id} @ {now}")
+      print(f"{member.id} left {old_channel_id} @ {now}")
 
-        # Record short stay if applicable
-        join_time = user_joined_at.pop(member.id, None)
-        short_stay_duration = (now - join_time).total_seconds() if join_time is not None else None
-        if (short_stay_duration is not None) and (short_stay_duration < STUDY_TIME_VC_SHORT_STAY_SECONDS):
-          print(f"{member.id} short stay: {short_stay_duration:.0f}s")
-          short_stay_history[member.id] = prune_timestamps(
-            short_stay_history[member.id], now - STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA
-          )
-          short_stay_history[member.id].append(now)
-      finally:
-        try:
-          await member.remove_roles(target_role)
-        except Exception as e:
-          print(f"Failed to remove role from {member.id}: {e}")
+      # Record short stay if applicable
+      join_time = user_joined_at.pop(member.id, None)
+      short_stay_duration = (now - join_time).total_seconds() if join_time is not None else None
+      if (short_stay_duration is not None) and (short_stay_duration < STUDY_TIME_VC_SHORT_STAY_SECONDS):
+        print(f"{member.id} short stay: {short_stay_duration:.0f}s")
+        short_stay_history[member.id] = prune_timestamps(
+          short_stay_history[member.id], now - STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA
+        )
+        short_stay_history[member.id].append(now)
+
+      try:
+        await member.remove_roles(target_role)
+      except Exception as e:
+        print(f"Failed to remove role from {member.id}: {e}")
   except Exception as error:
     print(f"An error occurred while processing role change: {error}")
 
