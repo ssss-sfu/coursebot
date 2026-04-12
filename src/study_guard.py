@@ -16,6 +16,7 @@ def load_config() -> dict:
   - Add custom role for STUDY_TIME_ROLE_NAME
   - Ensure bot role is above STUDY_TIME_ROLE_NAME
   """
+  guild_id = int(os.getenv("GUILD_ID", "0"))
   vc_channel_id = int(os.getenv("STUDY_TIME_VC_CHANNEL_ID", "0"))
   moderation_channel_id = int(os.environ.get("MODERATION_REPORT_VC_CHANNEL_ID", "0"))
   role_name = os.getenv("STUDY_TIME_ROLE_NAME", "")
@@ -31,7 +32,7 @@ def load_config() -> dict:
   short_stay_window_s = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS", "120"))
   cleanup_interval_s = 600
 
-  if not all([vc_channel_id, role_name, moderation_channel_id]):
+  if not all([vc_channel_id, role_name, moderation_channel_id, guild_id]):
     raise RuntimeError("Invalid .env config")
 
   non_zero_values = {
@@ -68,7 +69,8 @@ def load_config() -> dict:
     'STUDY_TIME_VC_SHORT_STAY_SECONDS': short_stay_s,
     'STUDY_TIME_VC_SHORT_STAY_THRESHOLD_SECONDS': short_stay_threshold,
     'STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS': short_stay_window_s,
-    'STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA': timedelta(seconds=short_stay_window_s)
+    'STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA': timedelta(seconds=short_stay_window_s),
+    'GUILD_ID': guild_id
   }
 
 
@@ -92,17 +94,18 @@ async def send_dm(member: discord.Member, message: str):
 async def send_channel_message(client: discord.Client, channelId: int, message: str):
   channel = client.get_channel(channelId)
   if channel and type(channel) == discord.TextChannel:
-    await channel.send(message)
+    await channel.send(f'[STUDY TIME] {message}')
   else:
     print(f'Failed to send message to channel {channelId}')
 
 
-def setup(bot, config):
+def setup(bot: discord.Client, config):
   global is_study_guard_initialized
   if is_study_guard_initialized:
     raise RuntimeError('This has already been called')
   is_study_guard_initialized = True
   
+  guild_id = config['GUILD_ID']
   vc_channel_id = config['STUDY_TIME_VC_CHANNEL_ID']
   moderation_channel_id = config['MODERATION_REPORT_VC_CHANNEL_ID']
   role_name = config['STUDY_TIME_ROLE_NAME']
@@ -118,6 +121,7 @@ def setup(bot, config):
   join_history: dict[int, list[datetime]] = defaultdict(list)
   short_stay_history: dict[int, list[datetime]] = defaultdict(list)
   user_joined_at: dict[int, datetime] = {}
+
 
   @tasks.loop(seconds=cleanup_interval_s)
   async def cleanup_stale_history():
@@ -144,6 +148,48 @@ def setup(bot, config):
       if user_joined_at[user_id] < stale_threshold:
         del user_joined_at[user_id]
 
+
+  async def on_ready(bot: discord.Client):
+    if not cleanup_stale_history.is_running():
+      cleanup_stale_history.start()
+
+    guild = bot.get_guild(guild_id)
+    study_time_vc = bot.get_channel(vc_channel_id)
+
+    if guild and study_time_vc and type(study_time_vc) is discord.VoiceChannel:
+      study_time_role = discord.utils.get(guild.roles, name=role_name)
+      if not study_time_role:
+        raise RuntimeError('Could not locate Study Time role')
+
+      # Auto clear study time roles
+      removed_roles = 0
+      for member in guild.members:
+        try:
+          if member.get_role(study_time_role.id):
+            removed_roles += 1
+            await member.remove_roles(study_time_role)
+        except Exception as e:
+          print(e)
+
+      # Auto assign role to all members in the VC
+      added_roles = 0
+      for member in study_time_vc.members:
+        try:
+          added_roles += 1
+          await member.add_roles(study_time_role)
+        except Exception as e:
+          print(e)
+      
+      await send_channel_message(
+        bot,
+        moderation_channel_id,
+        f'Done initializing for Study Time. Auto assigned {study_time_role} role to {added_roles} members and removed from {removed_roles} other members.'
+      )
+        
+    else:
+      raise RuntimeError('Cannot initialize Study Time bot')
+    
+
   @bot.event
   async def on_voice_state_update(
     member: discord.Member,
@@ -166,7 +212,6 @@ def setup(bot, config):
 
     try:
       if is_joined:
-        is_rejected = False
 
         # Prune join history and check frequency limit
         join_history[member.id] = prune_timestamps(
@@ -177,7 +222,7 @@ def setup(bot, config):
         if len(join_history[member.id]) >= join_limit_count:
           oldest = join_history[member.id][0]
           remaining = max(1, int((oldest + join_limit_window_td - now).total_seconds()))
-          moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {format_eta(remaining)} ({join_limit_count} in {join_limit_window_s}s to {new_channel_name})"
+          moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {format_eta(remaining)} ({join_limit_count} in {format_eta(join_limit_window_s)} to {new_channel_name})"
 
           await send_dm(
             member,
@@ -185,34 +230,32 @@ def setup(bot, config):
             f"Please wait {format_eta(remaining)} before rejoining to have access to the chat.",
           )
           await send_channel_message(bot, moderation_channel_id, moderation_message)
-          is_rejected = True
+          return
 
-        if not is_rejected:
-          join_history[member.id].append(now)
+        join_history[member.id].append(now)
 
-          # Check short-stay abuse
-          short_stay_history[member.id] = prune_timestamps(
-            short_stay_history[member.id], now - short_stay_window_td
+        # Check short-stay abuse
+        short_stay_history[member.id] = prune_timestamps(
+          short_stay_history[member.id], now - short_stay_window_td
+        )
+        if len(short_stay_history[member.id]) >= short_stay_threshold:
+          oldest = short_stay_history[member.id][0]
+          remaining = max(1, int((oldest + short_stay_window_td - now).total_seconds()))
+          moderation_message = f"{member.name} ({member.id}) flagged for short-stay abuse with timeout {format_eta(remaining)} ({len(short_stay_history[member.id])} short visits to {new_channel_name})"
+
+          await send_dm(
+            member,
+            f"You have been joining Study Time for very short periods too often. "
+            f"Please wait {format_eta(remaining)} before rejoining to have access to the chat.",
           )
-          if len(short_stay_history[member.id]) >= short_stay_threshold:
-            oldest = short_stay_history[member.id][0]
-            remaining = max(1, int((oldest + short_stay_window_td - now).total_seconds()))
-            moderation_message = f"{member.name} ({member.id}) flagged for short-stay abuse with timeout {format_eta(remaining)} ({len(short_stay_history[member.id])} short visits to {new_channel_name})"
+          await send_channel_message(bot, moderation_channel_id, moderation_message)
+          return
 
-            await send_dm(
-              member,
-              f"You have been joining Study Time for very short periods too often. "
-              f"Please wait {format_eta(remaining)} before rejoining to have access to the chat.",
-            )
-            await send_channel_message(bot, moderation_channel_id, moderation_message)
-            is_rejected = True
-
-        if not is_rejected:
-          user_joined_at[member.id] = now
-          try:
-            await member.add_roles(target_role)
-          except Exception as e:
-            await send_channel_message(bot, moderation_channel_id, f"[ERROR] Failed to add role {target_role.name} to {member.name} ({member.id}): {e}")
+        user_joined_at[member.id] = now
+        try:
+          await member.add_roles(target_role)
+        except Exception as e:
+          await send_channel_message(bot, moderation_channel_id, f"[ERROR] Failed to add role {target_role.name} to {member.name} ({member.id}): {e}")
 
       elif is_left:
         # Record short stay if applicable
@@ -231,6 +274,7 @@ def setup(bot, config):
     except Exception as error:
       await send_channel_message(bot, moderation_channel_id, f"[ERROR] An error occurred while processing role change: {error}")
 
+
   return {
-    'cleanup_stale_history': cleanup_stale_history
+    'on_ready': on_ready
   }

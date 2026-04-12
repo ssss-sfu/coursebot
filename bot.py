@@ -37,7 +37,6 @@ intents.members = True # Enable members intent
 bot = commands.Bot(command_prefix='!', intents=intents, case_insensitive=True) # command handling
 
 study_guard_client = study_guard.setup(bot, _study_guard_config)
-cleanup_stale_history = study_guard_client['cleanup_stale_history']
 
 #async health check
 async def health_check(request):
@@ -57,12 +56,11 @@ async def run_health_server():
 @bot.event
 async def on_ready():
     print(f'Bot is online as {bot.user}')
+    await study_guard_client['on_ready'](bot)
     synced = await bot.tree.sync()
     print(f"Synced {len(synced)} command(s)")
     print("Available commands:", [cmd.name for cmd in synced])
 
-    if not cleanup_stale_history.is_running():
-        cleanup_stale_history.start()
 
 @bot.event
 async def on_connect():
