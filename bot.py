@@ -468,32 +468,25 @@ async def cleanup_stale_history():
   # Avoid DoS or other weird stuff
 
   now = datetime.now(timezone.utc)
-  gc_message = f'[HEALTH] Running Study Time GC at {now}'
 
-  async def do_cleanup():
-    join_window_start = now - STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA
-    short_stay_window_start = now - STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA
+  join_window_start = now - STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA
+  short_stay_window_start = now - STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA
 
-    for user_id in list(join_history.keys()):
-      join_history[user_id] = prune_timestamps(join_history[user_id], join_window_start)
-      if not join_history[user_id]:
-        del join_history[user_id]
+  for user_id in list(join_history.keys()):
+    join_history[user_id] = prune_timestamps(join_history[user_id], join_window_start)
+    if not join_history[user_id]:
+      del join_history[user_id]
 
-    for user_id in list(short_stay_history.keys()):
-      short_stay_history[user_id] = prune_timestamps(short_stay_history[user_id], short_stay_window_start)
-      if not short_stay_history[user_id]:
-        del short_stay_history[user_id]
+  for user_id in list(short_stay_history.keys()):
+    short_stay_history[user_id] = prune_timestamps(short_stay_history[user_id], short_stay_window_start)
+    if not short_stay_history[user_id]:
+      del short_stay_history[user_id]
 
-    # Clean up user_joined_at entries older than the largest window
-    stale_threshold = now - timedelta(seconds=max(STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS, STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS))
-    for user_id in list(user_joined_at.keys()):
-      if user_joined_at[user_id] < stale_threshold:
-        del user_joined_at[user_id]
-
-  await asyncio.gather(
-    send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, gc_message),
-    do_cleanup(),
-  )
+  # Clean up user_joined_at entries older than the largest window
+  stale_threshold = now - timedelta(seconds=max(STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS, STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS))
+  for user_id in list(user_joined_at.keys()):
+    if user_joined_at[user_id] < stale_threshold:
+      del user_joined_at[user_id]
 
 
 @bot.event
@@ -532,7 +525,6 @@ async def on_voice_state_update(
         remaining = max(1, int((oldest + STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA - now).total_seconds()))
         moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {format_eta(remaining)} ({STUDY_TIME_VC_JOIN_LIMIT_COUNT} in {STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS}s to {new_channel_name})"
 
-        print(moderation_message)
         await send_dm(
           member,
           f"You are joining Study Time too frequently. "
@@ -553,7 +545,6 @@ async def on_voice_state_update(
           remaining = max(1, int((oldest + STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA - now).total_seconds()))
           moderation_message = f"{member.name} ({member.id}) flagged for short-stay abuse with timeout {format_eta(remaining)} ({len(short_stay_history[member.id])} short visits to {new_channel_name})"
 
-          print(moderation_message)
           await send_dm(
             member,
             f"You have been joining Study Time for very short periods too often. "
@@ -567,7 +558,7 @@ async def on_voice_state_update(
         try:
           await member.add_roles(target_role)
         except Exception as e:
-          print(f"Failed to add role to {member.id}: {e}")
+          await send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, f"Failed to add role {target_role.name} to {member.name} ({member.id}): {e}")
 
     elif is_left:
       print(f"{member.id} left {old_channel_id} @ {now}")
@@ -585,7 +576,7 @@ async def on_voice_state_update(
       try:
         await member.remove_roles(target_role)
       except Exception as e:
-        print(f"Failed to remove role from {member.id}: {e}")
+        await send_channel_message(bot, MODERATION_REPORT_VC_CHANNEL_ID, f"Failed to remove role ${target_role.name} from {member.name} ({member.id}): {e}")
   except Exception as error:
     print(f"An error occurred while processing role change: {error}")
 
