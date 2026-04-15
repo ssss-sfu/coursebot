@@ -204,10 +204,10 @@ def setup(bot: discord.Client, config):
   ):
     if not study_time_role:
       raise RuntimeError('Study Time Role is missing. Initialization failed')
-    
-    await bot.wait_until_ready()
 
     now = datetime.now(timezone.utc)
+    await bot.wait_until_ready()
+
     new_channel_id = after.channel.id if after.channel else None
     old_channel_id = before.channel.id if before.channel else None
     is_joined = new_channel_id == vc_channel_id and old_channel_id != vc_channel_id
