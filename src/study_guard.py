@@ -121,6 +121,7 @@ def setup(bot: discord.Client, config):
   join_history: dict[int, list[datetime]] = defaultdict(list)
   short_stay_history: dict[int, list[datetime]] = defaultdict(list)
   user_joined_at: dict[int, datetime] = {}
+  study_time_role = None
 
 
   @tasks.loop(seconds=cleanup_interval_s)
@@ -150,6 +151,8 @@ def setup(bot: discord.Client, config):
 
 
   async def on_ready(bot: discord.Client):
+    nonlocal study_time_role
+
     if not cleanup_stale_history.is_running():
       cleanup_stale_history.start()
 
@@ -199,12 +202,10 @@ def setup(bot: discord.Client, config):
     before: discord.VoiceState,
     after: discord.VoiceState,
   ):
+    if not study_time_role:
+      raise RuntimeError('Study Time Role is missing. Initialization failed')
+    
     await bot.wait_until_ready()
-
-    target_role = discord.utils.get(member.guild.roles, name=role_name)
-    if not target_role:
-      await send_channel_message(bot, moderation_channel_id, f'[ERROR] Unable to locate role "{role_name}" through member context')
-      return
 
     now = datetime.now(timezone.utc)
     new_channel_id = after.channel.id if after.channel else None
@@ -256,9 +257,9 @@ def setup(bot: discord.Client, config):
 
         user_joined_at[member.id] = now
         try:
-          await member.add_roles(target_role)
+          await member.add_roles(study_time_role)
         except Exception as e:
-          await send_channel_message(bot, moderation_channel_id, f"[ERROR] Failed to add role {target_role.name} to {member.name} ({member.id}): {e}")
+          await send_channel_message(bot, moderation_channel_id, f"[ERROR] Failed to add role {study_time_role.name} to {member.name} ({member.id}): {e}")
 
       elif is_left:
         # Record short stay if applicable
@@ -271,9 +272,9 @@ def setup(bot: discord.Client, config):
           short_stay_history[member.id].append(now)
 
         try:
-          await member.remove_roles(target_role)
+          await member.remove_roles(study_time_role)
         except Exception as e:
-          await send_channel_message(bot, moderation_channel_id, f"[ERROR] Failed to remove role ${target_role.name} from {member.name} ({member.id}): {e}")
+          await send_channel_message(bot, moderation_channel_id, f"[ERROR] Failed to remove role ${study_time_role.name} from {member.name} ({member.id}): {e}")
     except Exception as error:
       await send_channel_message(bot, moderation_channel_id, f"[ERROR] An error occurred while processing role change: {error}")
 
