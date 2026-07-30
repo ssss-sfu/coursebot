@@ -13,7 +13,7 @@ from aiohttp import web
 from src import study_guard
 
 load_dotenv()
-_study_guard_config = study_guard.load_config()
+#_study_guard_config = study_guard.load_config()
 
 
 # helper function to parse term year
@@ -36,7 +36,7 @@ intents.members = True # Enable members intent
 # Registers an event. This event is called when the bot has switched from offline to online.
 bot = commands.Bot(command_prefix='!', intents=intents, case_insensitive=True) # command handling
 
-study_guard_client = study_guard.setup(bot, _study_guard_config)
+
 
 #async health check
 async def health_check(request):
@@ -384,12 +384,20 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
 
 
 async def main():
+  global study_guard_client
+  
   if not DISCORD_TOKEN:
     raise RuntimeError("ERROR: DISCORD_TOKEN environment variable is not set!")
 
+  # 
+  study_guard_client = study_guard.setup(bot, _study_guard_config)
+  study_guard_client_local = study_guard.setup(bot, _study_guard_config)
+  study_guard_client = study_guard_client_local
+  
   # run the health server FIRST so App Runner health checks pass
   await run_health_server()
   print("Health check server is running on port 8080")
+  
   # Start the Discord bot
   async with bot:
     await bot.start(DISCORD_TOKEN)
