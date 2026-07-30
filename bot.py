@@ -385,15 +385,13 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
 
 async def main():
   global study_guard_client
-  
+
   if not DISCORD_TOKEN:
     raise RuntimeError("ERROR: DISCORD_TOKEN environment variable is not set!")
 
-  # 
+  _study_guard_config = study_guard.load_config()
   study_guard_client = study_guard.setup(bot, _study_guard_config)
-  study_guard_client_local = study_guard.setup(bot, _study_guard_config)
-  study_guard_client = study_guard_client_local
-  
+
   # run the health server FIRST so App Runner health checks pass
   await run_health_server()
   print("Health check server is running on port 8080")

@@ -8,8 +8,9 @@ services:
     #automatically restarts container if it crashes unless you stop manually
     restart: unless-stopped
     #passes discord bot token from my .env file into container as environment variable
-    environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
+    #environment:
+    #  - DISCORD_TOKEN=${DISCORD_TOKEN}
+    env_file: .env
     #mounts local data directory to /app/data in container for persistent storage(faster build times)
     volumes:
       - ./data:/app/data
