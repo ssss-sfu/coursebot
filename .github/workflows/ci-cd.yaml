@@ -52,11 +52,34 @@ jobs:
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
       - name: Trigger App Runner deployment
+        id: deploy
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY_NAME }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          aws apprunner update-service \
+          OPERATION_ID=$(aws apprunner update-service \
             --service-arn "${{ secrets.APP_RUNNER_SERVICE_ARN }}" \
-            --source-configuration "ImageRepository={ImageIdentifier=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG,ImageRepositoryType=ECR}"
+            --source-configuration "ImageRepository={ImageIdentifier=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG,ImageRepositoryType=ECR}" \
+            --query OperationId --output text)
+          echo "operation_id=$OPERATION_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for App Runner Deployment
+        env: 
+          SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
+          OPERATION_ID: ${{ steps.deploy.outputs.operation_id }}
+        run: |
+          for attempt in $(seq 1 45); do
+            STATUS=$(aws apprunner list-operations --service-arn "$SERVICE_ARN" \
+              --query "OperationSummaryList[?Id=='$OPERATION_ID'].Status | [0]" --output text)
+            echo "Attempt $attempt: $STATUS"
+            case "$STATUS" in
+              SUCCEEDED) exit 0 ;;
+              FAILED|ROLLBACK_SUCCEEDED|ROLLBACK_FAILED)
+                echo "::error::App Runner deployment ended with $STATUS"
+                exit 1 ;;
+            esac
+            sleep 20
+          done
+          echo "::error::Timed out waiting for App Runner deployment"
+          exit 1
