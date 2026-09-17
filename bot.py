@@ -11,6 +11,7 @@ import urllib.parse
 import asyncio
 from aiohttp import web
 from src import study_guard
+import signal
 
 load_dotenv()
 #_study_guard_config = study_guard.load_config()
@@ -55,11 +56,16 @@ async def run_health_server():
 
 @bot.event
 async def on_ready():
-    print(f'Bot is online as {bot.user}')
-    await study_guard_client['on_ready'](bot)
-    synced = await bot.tree.sync()
-    print(f"Synced {len(synced)} command(s)")
-    print("Available commands:", [cmd.name for cmd in synced])
+  print(f'Bot is online as {bot.user}')
+  await study_guard_client['on_ready'](bot)
+  synced = await bot.tree.sync()
+  print(f"Synced {len(synced)} command(s)")
+  print("Available commands:", [cmd.name for cmd in synced])
+  await study_guard.send_channel_message(
+    bot,
+    _study_guard_config['STUDY_TIME_TEXT_CHANNEL_ID'],
+    'study time should be working now...'
+  )
 
 
 @bot.event
@@ -384,7 +390,7 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
 
 
 async def main():
-  global study_guard_client
+  global study_guard_client, _study_guard_config
 
   if not DISCORD_TOKEN:
     raise RuntimeError("ERROR: DISCORD_TOKEN environment variable is not set!")
@@ -396,9 +402,34 @@ async def main():
   await run_health_server()
   print("Health check server is running on port 8080")
   
-  # Start the Discord bot
-  async with bot:
-    await bot.start(DISCORD_TOKEN)
+  # Loop for graceful shutdown upon receiving SIGINT or SIGTERM
+  loop = asyncio.get_running_loop() # Get the running loop
+  shutdown_event = asyncio.Event() # to request a graceful shutdown
+  for sig in (signal.SIGINT, signal.SIGTERM): # Add signal handlers for SIGINT and SIGTERM
+    loop.add_signal_handler(sig, shutdown_event.set) # for testing with ctrl+c
+  async with bot: # Start the Discord bot
+    bot_task = asyncio.create_task(bot.start(DISCORD_TOKEN)) # Create a task to start the Discord bot as a background task
+    shutdown_tasks = asyncio.create_task(shutdown_event.wait()) # Create a task to wait for the shutdown event
+    done, pending = await asyncio.wait( # whichever task completes first determines the outcome
+      {bot_task, shutdown_tasks},return_when=asyncio.FIRST_COMPLETED # Return when the first task completes
+    )
+    
+    study_time_text_channel = _study_guard_config['STUDY_TIME_TEXT_CHANNEL_ID']
+    if shutdown_tasks in done:
+      print("Received shutdown signal. Shutting down...")
+      await study_guard.send_channel_message(
+        bot,
+        study_time_text_channel,
+        'restarting for an update... if study time is still broken in a few minutes, ping mehar'
+      )
+      bot_task.cancel()
+      try:
+        await bot_task
+      except asyncio.CancelledError:
+        pass
+    else:
+      # the bot task finished on its own, so we can just get the result
+      bot_task.result()
 
 if __name__ == '__main__':
   asyncio.run(main())

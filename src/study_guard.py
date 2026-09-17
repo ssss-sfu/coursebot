@@ -18,6 +18,7 @@ def load_config() -> dict:
   """
   guild_id = int(os.getenv("GUILD_ID", "0"))
   vc_channel_id = int(os.getenv("STUDY_TIME_VC_CHANNEL_ID", "0"))
+  vc_text_channel_id = int(os.getenv("STUDY_TIME_TEXT_CHANNEL_ID", "0"))
   moderation_channel_id = int(os.environ.get("MODERATION_REPORT_VC_CHANNEL_ID", "0"))
   role_name = os.getenv("STUDY_TIME_ROLE_NAME", "")
 
@@ -32,7 +33,7 @@ def load_config() -> dict:
   short_stay_window_s = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS", "120"))
   cleanup_interval_s = 600
 
-  if not all([vc_channel_id, role_name, moderation_channel_id, guild_id]):
+  if not all([vc_channel_id, vc_text_channel_id, role_name, moderation_channel_id, guild_id]):
     raise RuntimeError("Invalid .env config")
 
   non_zero_values = {
@@ -60,6 +61,7 @@ def load_config() -> dict:
 
   return {
     'STUDY_TIME_VC_CHANNEL_ID': vc_channel_id,
+    'STUDY_TIME_TEXT_CHANNEL_ID': vc_text_channel_id,
     'MODERATION_REPORT_VC_CHANNEL_ID': moderation_channel_id,
     'STUDY_TIME_ROLE_NAME': role_name,
     'CLEANUP_INTERVAL_SECONDS': cleanup_interval_s,
@@ -94,7 +96,7 @@ async def send_dm(member: discord.Member, message: str):
 async def send_channel_message(client: discord.Client, channelId: int, message: str):
   channel = client.get_channel(channelId)
   if channel and type(channel) == discord.TextChannel:
-    await channel.send(f'[STUDY TIME] {message}')
+    await channel.send(f'[STUDY TIME]: {message}')
   else:
     print(f'Failed to send message to channel {channelId}')
 
