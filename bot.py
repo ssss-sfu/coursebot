@@ -420,7 +420,7 @@ async def main():
       await study_guard.send_channel_message(
         bot,
         study_time_text_channel,
-        'bot maintenance in progress... ping mehar if study time is broken'
+        'restarting for an update... if study time is still broken in a few minutes, ping mehar'
       )
       bot_task.cancel()
       try:
