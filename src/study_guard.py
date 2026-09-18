@@ -1,80 +1,17 @@
-import os
 import discord
 from discord.ext import tasks
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
-from dotenv import load_dotenv
+from src.config import StudyTimeConfig
+from typing import NamedTuple, Callable, Awaitable
 
 is_study_guard_initialized = False
 
-load_dotenv()
-
-
-def load_config() -> dict:
-  """
-  SETUP:
-  - Add custom role for STUDY_TIME_ROLE_NAME
-  - Ensure bot role is above STUDY_TIME_ROLE_NAME
-  """
-  guild_id = int(os.getenv("GUILD_ID", "0"))
-  vc_channel_id = int(os.getenv("STUDY_TIME_VC_CHANNEL_ID", "0"))
-  vc_text_channel_id = int(os.getenv("STUDY_TIME_TEXT_CHANNEL_ID", "0"))
-  moderation_channel_id = int(os.environ.get("MODERATION_REPORT_VC_CHANNEL_ID", "0"))
-  role_name = os.getenv("STUDY_TIME_ROLE_NAME", "")
-
-  join_limit_count = int(os.getenv("STUDY_TIME_VC_JOIN_LIMIT_COUNT", "5"))
-  join_limit_window_s = int(os.getenv("STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS", "60"))
-
-  # Short-stay abuse detection: if a user has STUDY_TIME_VC_SHORT_STAY_THRESHOLD or more
-  # visits shorter than STUDY_TIME_VC_SHORT_STAY_SECONDS within the tracking window,
-  # they are blocked from receiving the role.
-  short_stay_s = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_SECONDS", "30"))
-  short_stay_threshold = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_THRESHOLD", "5"))
-  short_stay_window_s = int(os.getenv("STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS", "120"))
-  cleanup_interval_s = 600
-
-  if not all([vc_channel_id, vc_text_channel_id, role_name, moderation_channel_id, guild_id]):
-    raise RuntimeError("Invalid .env config")
-
-  non_zero_values = {
-    "STUDY_TIME_VC_JOIN_LIMIT_COUNT": join_limit_count,
-    "STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS": join_limit_window_s,
-    "STUDY_TIME_VC_SHORT_STAY_SECONDS": short_stay_s,
-    "STUDY_TIME_VC_SHORT_STAY_THRESHOLD": short_stay_threshold,
-    "STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS": short_stay_window_s,
-  }
-  for name, value in non_zero_values.items():
-    if value <= 0:
-      raise RuntimeError(f"Invalid .env config: {name} must be a positive integer, got {value}")
-
-  if short_stay_s >= short_stay_window_s:
-    raise RuntimeError(
-      f"Invalid .env config: STUDY_TIME_VC_SHORT_STAY_SECONDS ({short_stay_s}) "
-      f"must be less than STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS ({short_stay_window_s})"
-    )
-
-  if join_limit_count >= join_limit_window_s:
-    raise RuntimeError(
-      f"Invalid .env config: STUDY_TIME_VC_JOIN_LIMIT_COUNT ({join_limit_count}) "
-      f"must be less than STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS ({join_limit_window_s})"
-    )
-
-  return {
-    'STUDY_TIME_VC_CHANNEL_ID': vc_channel_id,
-    'STUDY_TIME_TEXT_CHANNEL_ID': vc_text_channel_id,
-    'MODERATION_REPORT_VC_CHANNEL_ID': moderation_channel_id,
-    'STUDY_TIME_ROLE_NAME': role_name,
-    'CLEANUP_INTERVAL_SECONDS': cleanup_interval_s,
-    'STUDY_TIME_VC_JOIN_LIMIT_COUNT': join_limit_count,
-    'STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS': join_limit_window_s,
-    'STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA': timedelta(seconds=join_limit_window_s),
-    'STUDY_TIME_VC_SHORT_STAY_SECONDS': short_stay_s,
-    'STUDY_TIME_VC_SHORT_STAY_THRESHOLD_SECONDS': short_stay_threshold,
-    'STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS': short_stay_window_s,
-    'STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA': timedelta(seconds=short_stay_window_s),
-    'GUILD_ID': guild_id
-  }
-
+# Represents the Study Guard client
+# This class is used to initialize the Study Guard client
+# It contains the on_ready function which is called when the bot is ready
+class StudyGuardClient(NamedTuple):
+  on_ready: Callable[[discord.Client], Awaitable[None]] 
 
 def format_eta(seconds: int) -> str:
   minutes, secs = divmod(seconds, 60)
@@ -101,24 +38,24 @@ async def send_channel_message(client: discord.Client, channelId: int, message: 
     print(f'Failed to send message to channel {channelId}')
 
 
-def setup(bot: discord.Client, config):
+def setup(bot: discord.Client, config: StudyTimeConfig):
   global is_study_guard_initialized
   if is_study_guard_initialized:
     raise RuntimeError('This has already been called')
   is_study_guard_initialized = True
   
-  guild_id = config['GUILD_ID']
-  vc_channel_id = config['STUDY_TIME_VC_CHANNEL_ID']
-  moderation_channel_id = config['MODERATION_REPORT_VC_CHANNEL_ID']
-  role_name = config['STUDY_TIME_ROLE_NAME']
-  join_limit_count = config['STUDY_TIME_VC_JOIN_LIMIT_COUNT']
-  join_limit_window_s = config['STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS']
-  join_limit_window_td = config['STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS_TIMEDELTA']
-  short_stay_s = config['STUDY_TIME_VC_SHORT_STAY_SECONDS']
-  short_stay_threshold = config['STUDY_TIME_VC_SHORT_STAY_THRESHOLD_SECONDS']
-  short_stay_window_s = config['STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS']
-  short_stay_window_td = config['STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS_TIMEDELTA']
-  cleanup_interval_s = config['CLEANUP_INTERVAL_SECONDS']
+  guild_id = config.guild_id
+  vc_channel_id = config.vc_channel_id
+  moderation_channel_id = config.moderation_channel_id
+  role_name = config.role_name
+  join_limit_count = config.join_limit_count
+  join_limit_window_s = config.join_limit_window_s
+  join_limit_window_td = config.join_limit_window_td
+  short_stay_s = config.short_stay_s
+  short_stay_threshold = config.short_stay_threshold
+  short_stay_window_s = config.short_stay_window_s
+  short_stay_window_td = config.short_stay_window_td
+  cleanup_interval_s = config.cleanup_interval_s
   
   join_history: dict[int, list[datetime]] = defaultdict(list)
   short_stay_history: dict[int, list[datetime]] = defaultdict(list)
@@ -281,6 +218,4 @@ def setup(bot: discord.Client, config):
       await send_channel_message(bot, moderation_channel_id, f"[ERROR] An error occurred while processing role change: {error}")
 
 
-  return {
-    'on_ready': on_ready
-  }
+  return StudyGuardClient(on_ready=on_ready)

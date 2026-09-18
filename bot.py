@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 from typing import Optional
-import os 
 import http.client
 import json
 import re
@@ -10,12 +9,10 @@ import urllib.parse
 # health check imports
 import asyncio
 from aiohttp import web
-from src import study_guard
+from src import study_guard, config
 import signal
 
 load_dotenv()
-#_study_guard_config = study_guard.load_config()
-
 
 # helper function to parse term year
 def parse_term_year(term_code: str):
@@ -25,8 +22,6 @@ def parse_term_year(term_code: str):
 #helper function to check the command type
 def get_command_type(ctx: commands.Context) -> str:
   return 'slash' if ctx.interaction else 'prefix'
-
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 
 conn = http.client.HTTPSConnection("api.sfucourses.com")
 
@@ -57,24 +52,24 @@ async def run_health_server():
 @bot.event
 async def on_ready():
   print(f'Bot is online as {bot.user}')
-  await study_guard_client['on_ready'](bot)
+  await study_guard_client.on_ready(bot)
   synced = await bot.tree.sync()
   print(f"Synced {len(synced)} command(s)")
   print("Available commands:", [cmd.name for cmd in synced])
   await study_guard.send_channel_message(
     bot,
-    _study_guard_config['STUDY_TIME_TEXT_CHANNEL_ID'],
+    settings.study_time_config.text_channel_id,
     'study time should be working now...'
   )
 
 
 @bot.event
 async def on_connect():
-    print("Bot connected to Discord!")
+  print("Bot connected to Discord!")
 
 @bot.event
 async def on_disconnect():
-    print("Bot disconnected from Discord!")
+  print("Bot disconnected from Discord!")
 
 # Main Course Command
 # Gets info about a course given subject and course number
@@ -390,13 +385,10 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
 
 
 async def main():
-  global study_guard_client, _study_guard_config
+  global study_guard_client, settings
+  settings = config.load()
 
-  if not DISCORD_TOKEN:
-    raise RuntimeError("ERROR: DISCORD_TOKEN environment variable is not set!")
-
-  _study_guard_config = study_guard.load_config()
-  study_guard_client = study_guard.setup(bot, _study_guard_config)
+  study_guard_client = study_guard.setup(bot, settings.study_time_config)
 
   # run the health server FIRST so App Runner health checks pass
   await run_health_server()
@@ -408,13 +400,13 @@ async def main():
   for sig in (signal.SIGINT, signal.SIGTERM): # Add signal handlers for SIGINT and SIGTERM
     loop.add_signal_handler(sig, shutdown_event.set) # for testing with ctrl+c
   async with bot: # Start the Discord bot
-    bot_task = asyncio.create_task(bot.start(DISCORD_TOKEN)) # Create a task to start the Discord bot as a background task
+    bot_task = asyncio.create_task(bot.start(settings.discord_token)) # Create a task to start the Discord bot as a background task
     shutdown_tasks = asyncio.create_task(shutdown_event.wait()) # Create a task to wait for the shutdown event
     done, pending = await asyncio.wait( # whichever task completes first determines the outcome
       {bot_task, shutdown_tasks},return_when=asyncio.FIRST_COMPLETED # Return when the first task completes
     )
     
-    study_time_text_channel = _study_guard_config['STUDY_TIME_TEXT_CHANNEL_ID']
+    study_time_text_channel = settings.study_time_config.text_channel_id
     if shutdown_tasks in done:
       print("Received shutdown signal. Shutting down...")
       await study_guard.send_channel_message(
