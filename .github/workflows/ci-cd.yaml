@@ -15,7 +15,7 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: 3.13
@@ -33,7 +33,7 @@ jobs:
       group: deploy-production # GitHub allows one deploy running plus one waiting if I merge PRs too fast.
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4 
+      - uses: actions/checkout@v7 
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
