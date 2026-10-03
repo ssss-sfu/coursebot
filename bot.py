@@ -1,9 +1,6 @@
 import asyncio
-import http.client
-import json
 import re
 import signal
-import urllib.parse
 
 import aiohttp
 import discord
@@ -12,7 +9,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 from src import config, study_guard
-from src.sfu_api import SFUClient
+from src.sfu_api import SFUApiError, SFUClient
 
 load_dotenv()
 
@@ -27,8 +24,6 @@ def parse_term_year(term_code: str):
 def get_command_type(ctx: commands.Context) -> str:
   return 'slash' if ctx.interaction else 'prefix'
 
-
-conn = http.client.HTTPSConnection("api.sfucourses.com")
 
 # Creates an instance of a client. This is our conneciton to discord.
 intents = discord.Intents.default()
@@ -81,59 +76,48 @@ async def on_disconnect():
 # Can give optioanl arguments for Semester, Section, Instructor Userid, and Campus
 @bot.hybrid_command(name='course', with_app_command=True, description="Get detailed info about a course")
 async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
-  # Considering courses that have alphanumeric course numbers (e.g., "105W")
-  number = re.fullmatch(r'(\d+)([A-Za-z]*)', course_number.strip())
-  if not number:
+  raw_number = course_number.strip()
+  if not re.fullmatch(r'\d+[A-Za-z]*', raw_number):
     await ctx.send("Invalid course number format. Please use a format like '101' or '105W'.")
     return
-  raw_number = course_number.strip()
-  # connects to SFUCourses API to get outlines for requested course
-  conn.request("GET", f"/v1/rest/outlines?dept={subject}&number={raw_number}")
-  # stores response from API
-  response = conn.getresponse()
-
-  if response.status == 200:
-    outlines = response.read()
-    if outlines == b'[]':
-      await ctx.send(f"No course data found for {subject.upper()} {course_number}. Please try again.")
-      return
-    data = json.loads(outlines.decode('utf-8'))
-    if not data:
-      if course_number.strip() == "67":
-        await ctx.send("67")
-        return
-      await ctx.send(f"No course data found for {subject.upper()} {course_number}.")
-      return
-    course = data[0]
-    embed = discord.Embed(
-      title=f"{course['dept']} {course['number']}: {course['title']}",
-      description=course['description'],
-      color=discord.Color.blue(),
-    )
-
-    offerings = course.get('offerings', [])
-    if offerings:
-      sorted_offerings = sorted(offerings, key=lambda x: parse_term_year(x.get('term', '')), reverse=True)
-      recent_offerings = sorted_offerings[:4] if len(sorted_offerings) >= 4 else sorted_offerings
-      offerings_list = []
-      for offering in recent_offerings:
-        term = offering.get('term', 'unknown')
-        instructors = offering.get('instructors', [])
-        if instructors:
-          instructor_str = ", ".join(instructors)
-          offerings_list.append(f"• **{term}** - Instructors: {instructor_str}")
-        else:
-          offerings_list.append(f"• **{term} - No instructors listed**")
-      embed.add_field(name="Recent Offerings", value="\n".join(offerings_list), inline=False)
-    else:
-      embed.add_field(name="Recent Offerings Found", value="No offerings available", inline=False)
-    embed.add_field(name="Credits", value=course['units'], inline=True)
-    embed.add_field(name="Prerequisites", value=course['prerequisites'] or "None", inline=True)
-    await ctx.send(embed=embed)
-  elif response.status == 404:
-    await ctx.send(f"Error fetching course outlines: {response.status}")
-  else:
+  try:
+    data = await sfu.get_json("/v1/rest/outlines", params={"dept": subject, "number": raw_number})
+  except SFUApiError as err:
+    print(f"/course failed: {err}")
     await ctx.send("An unexpected error occurred while fetching course outlines.")
+    return
+  if not data:
+    if raw_number == "67":
+      await ctx.send("67")
+      return
+    await ctx.send(f"No course data found for {subject.upper()} {course_number}.")
+    return
+  course = data[0]
+  embed = discord.Embed(
+    title=f"{course['dept']} {course['number']}: {course['title']}",
+    description=course['description'],
+    color=discord.Color.blue(),
+  )
+
+  offerings = course.get('offerings', [])
+  if offerings:
+    sorted_offerings = sorted(offerings, key=lambda x: parse_term_year(x.get('term', '')), reverse=True)
+    recent_offerings = sorted_offerings[:4] if len(sorted_offerings) >= 4 else sorted_offerings
+    offerings_list = []
+    for offering in recent_offerings:
+      term = offering.get('term', 'unknown')
+      instructors = offering.get('instructors', [])
+      if instructors:
+        instructor_str = ", ".join(instructors)
+        offerings_list.append(f"• **{term}** - Instructors: {instructor_str}")
+      else:
+        offerings_list.append(f"• **{term} - No instructors listed**")
+    embed.add_field(name="Recent Offerings", value="\n".join(offerings_list), inline=False)
+  else:
+    embed.add_field(name="Recent Offerings Found", value="No offerings available", inline=False)
+  embed.add_field(name="Credits", value=course['units'], inline=True)
+  embed.add_field(name="Prerequisites", value=course['prerequisites'] or "None", inline=True)
+  await ctx.send(embed=embed)
 
 
 # Instructors Command
@@ -143,148 +127,122 @@ async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
 #   offering format: {department, course number, term, course title}
 @bot.hybrid_command(name='offerings', with_app_command=True, description="Get course offerings by instructor")
 async def get_offerings(ctx: commands.Context, instructor_name: str, term: str | None = None):
-  encoded_name = urllib.parse.quote(instructor_name)
-  conn.request("GET", f"/v1/rest/instructors?name={encoded_name}")
-  response = conn.getresponse()
-
-  if response.status == 200:
-    data = json.loads(response.read().decode('utf-8'))
-    if data:
-      if len(data) > 1:
-        instructor_names = [instructor.get('name', 'Unknown') for instructor in data]
-        embed = discord.Embed(
-          title="Multiple Instructors Found",
-          description=f"Found {len(data)} instructors matching your search:",
-          color=discord.Color.orange(),
-        )
-        instructor_list = "\n".join(f"• {name}" for name in instructor_names[:10])
-        embed.add_field(name="Matching Instructors:", value=instructor_list, inline=False)
-        command_type = get_command_type(ctx)
-        if command_type == 'slash':
-          embed.set_footer(text="Tip: If using /instructor, retry with instructor's full name.")
-        else:
-          embed.set_footer(text="Tip: If using !instructor, use quotes around the full name.")
-        await ctx.send(embed=embed)
-        return
-      embeds = []
-      for instructor in data:
-        instructor_name = instructor.get('name', 'Unknown')
-        all_offerings = instructor.get('offerings', [])
-        if term:
-          filtered_offerings = [
-            offering for offering in all_offerings if term.lower() in offering.get('term', '').lower()
-          ]
-          show_offerings = filtered_offerings
-          if not show_offerings:
-            embed = discord.Embed(
-              title="No Offerings Found for Specified Term",
-              description=f"No offerings found for {instructor_name} in term '{term}'.",
-              color=discord.Color.red(),
-            )
-            embed.add_field(
-              name="Try:", value="• Check term spelling\n• Omit term to see all offerings\n", inline=False
-            )
-            embed.set_footer(text="Tip: Check term spelling or omit term to see all offerings.")
-            embeds.append(embed)
-            continue
-        else:
-          show_offerings = all_offerings
-        offerings_list = []
-        for offering in show_offerings:
-          dept = offering.get('dept', 'N/A')
-          number = offering.get('number', 'N/A')
-          term = offering.get('term', 'N/A')
-          title = offering.get('title', 'N/A')
-          offerings_list.append(f"**{dept} {number}** - {title} ({term})")
-
-        embed = discord.Embed(
-          title=f"Courses taught by {instructor_name}",
-          description="\n".join(offerings_list) if offerings_list else "No offerings found.",
-          color=discord.Color.green(),
-        )
-        embeds.append(embed)
-      for embed in embeds[:10]:
-        await ctx.send(embed=embed)
-    else:
-      # No instructors found
-      embed = discord.Embed(
-        title="No Instructors Found",
-        description=f"No instructors found with the name '{instructor_name}'",
-        color=discord.Color.red(),
-      )
-      embed.set_footer(text="Tip: Check your spelling or try using instructor's full name.")
-      await ctx.send(embed=embed)
-  elif response.status == 404:
-    embed = discord.Embed(title="Not Found", description="No instructors found", color=discord.Color.red())
-    await ctx.send(embed=embed)
-  else:
+  try:
+    data = await sfu.get_json("/v1/rest/instructors", params={"name": instructor_name})
+  except SFUApiError as err:
+    print(f"/offerings failed: {err}")
     embed = discord.Embed(
-      title="Server Error", description=f"Internal Server Error: {response.status}", color=discord.Color.red()
+      title="Server Error",
+      description="Couldn't reach the SFU Courses API. Try again later.",
+      color=discord.Color.red(),
     )
     await ctx.send(embed=embed)
+    return
+
+  if not data:  # None (404) or [] (no match)
+    embed = discord.Embed(
+      title="No Instructors Found",
+      description=f"No instructors found with the name '{instructor_name}'",
+      color=discord.Color.red(),
+    )
+    embed.set_footer(text="Tip: Check your spelling or try using instructor's full name.")
+    await ctx.send(embed=embed)
+    return
+
+  if len(data) > 1:
+    instructor_list = "\n".join(f"• {instructor.get('name', 'Unknown')}" for instructor in data[:10])
+    embed = discord.Embed(
+      title="Multiple Instructors Found",
+      description=f"Found {len(data)} instructors matching your search:",
+      color=discord.Color.orange(),
+    )
+    embed.add_field(name="Matching Instructors:", value=instructor_list, inline=False)
+    if get_command_type(ctx) == 'slash':
+      embed.set_footer(text="Tip: If using /offerings, retry with the instructor's full name.")
+    else:
+      embed.set_footer(text="Tip: If using !offerings, use quotes around the full name.")
+    await ctx.send(embed=embed)
+    return
+
+  instructor = data[0]
+  name = instructor.get('name', 'Unknown')
+  offerings = instructor.get('offerings', [])
+  if term:
+    offerings = [o for o in offerings if term.lower() in o.get('term', '').lower()]
+    if not offerings:
+      embed = discord.Embed(
+        title="No Offerings Found for Specified Term",
+        description=f"No offerings found for {name} in term '{term}'.",
+        color=discord.Color.red(),
+      )
+      embed.add_field(name="Try:", value="• Check term spelling\n• Omit term to see all offerings\n", inline=False)
+      await ctx.send(embed=embed)
+      return
+
+  offerings_list = [
+    f"**{o.get('dept', 'N/A')} {o.get('number', 'N/A')}** - {o.get('title', 'N/A')} ({o.get('term', 'N/A')})"
+    for o in offerings
+  ]
+  embed = discord.Embed(
+    title=f"Courses taught by {name}",
+    description="\n".join(offerings_list) if offerings_list else "No offerings found.",
+    color=discord.Color.green(),
+  )
+  await ctx.send(embed=embed)
 
 
 # Section Command
 # Returns section info for a specific course in a specific year and term
 # Parameters: year, term, department, course number
 @bot.hybrid_command(
-  name='section', with_app_command=True, description="Get specific course section for a specific year and term, "
+  name='section', with_app_command=True, description="Get specific course section for a specific year and term"
 )
 async def get_section(ctx: commands.Context, year: int, term: str, dept: str, number: str):
-  conn.request("GET", f"/v1/rest/sections?term={year}-{term}&dept={dept}&number={number}")
-  response = conn.getresponse()
-  if response.status == 200:
-    sections_list = response.read()  # array of dept, number, sections array, term, title, and units
-    data = json.loads(sections_list.decode('utf-8'))
-    if not data:
+  try:
+    data = await sfu.get_json("/v1/rest/sections", params={"term": f"{year}-{term}", "dept": dept, "number": number})
+  except SFUApiError as err:
+    print(f"/section failed: {err}")
+    if err.status == 400:
       embed = discord.Embed(
-        title="No Sections Found",
-        description=f"No sections found for {dept} {number} in {year}-{term}",
+        title="Try Again",
+        description="Invalid query parameters. Please make sure you use YYYY-term format. Ex. 2026-spring",
         color=discord.Color.red(),
       )
-      await ctx.send(embed=embed)
-      return
-    course = data[0]
-    embed = discord.Embed(
-      title=f"{course['dept']} {course['number']}: {course['title']} ({year}-{term})",
-      description=f"Units: {course['units']}",
-      color=discord.Color.green(),
-    )
-    sections = course.get('sections', [])
-    if sections:
-      sections_info = []
-      for section in sections:
-        sec_code = section.get('section', 'N/A')
-        instrs = section.get('instructors', [])
-        instrs_str = ", ".join(instrs) if instrs else "TBA"
-        schedule = section.get('schedule', 'TBA')
-        sections_info.append(f"**Section {sec_code}** - Instructors: {instrs_str} - Schedule: {schedule}")
-      embed.add_field(name="Sections:", value="\n".join(sections_info), inline=False)
     else:
-      embed.add_field(name="Sections:", value="No sections available", inline=False)
+      embed = discord.Embed(
+        title="Server Error", description="Internal Server Error from not this bot lol", color=discord.Color.red()
+      )
     await ctx.send(embed=embed)
-  elif response.status == 404:
+    return
+
+  if not data:
     embed = discord.Embed(
-      title="Not Found",
+      title="No Sections Found",
       description=f"No sections found for {dept} {number} in {year}-{term}",
       color=discord.Color.red(),
     )
     await ctx.send(embed=embed)
     return
-  elif response.status == 400:
-    embed = discord.Embed(
-      title="Try Again",
-      description="Invalid querey parameters. Please make sure you use YYYY-term format. Ex. 2026-spring",
-      color=discord.Color.red(),
-    )
-    await ctx.send(embed=embed)
-    return
+
+  course = data[0]
+  embed = discord.Embed(
+    title=f"{course['dept']} {course['number']}: {course['title']} ({year}-{term})",
+    description=f"Units: {course['units']}",
+    color=discord.Color.green(),
+  )
+  sections = course.get('sections', [])
+  if sections:
+    sections_info = []
+    for section in sections:
+      instrs = section.get('instructors', [])
+      sections_info.append(
+        f"**Section {section.get('section', 'N/A')}** - Instructors: {', '.join(instrs) if instrs else 'TBA'}"
+        f" - Schedule: {section.get('schedule', 'TBA')}"
+      )
+    embed.add_field(name="Sections:", value="\n".join(sections_info), inline=False)
   else:
-    embed = discord.Embed(
-      title="Server Error", description="Internal Server Error from not this bot lol", color=discord.Color.red()
-    )
-    await ctx.send(embed=embed)
-  return
+    embed.add_field(name="Sections:", value="No sections available", inline=False)
+  await ctx.send(embed=embed)
 
 
 # Reviews Command
@@ -292,68 +250,49 @@ async def get_section(ctx: commands.Context, year: int, term: str, dept: str, nu
 # Parameters: Instructor full name
 @bot.hybrid_command(name='reviews', with_app_command=True, description="Get reviews for a specific instructor")
 async def get_reviews(ctx: commands.Context, instructor_name: str):
-  conn.request("GET", "/v1/rest/reviews/instructors")  # Grabs data for ALL instructors
-  response = conn.getresponse()
-
-  if response.status == 200:
-    # success
-    data = json.loads(response.read().decode('utf-8'))
-    if data:
-      # Search for matching professor (case-insensitive)
-      found_prof = None
-      for summary in data:
-        prof_name = summary.get('Name', '')
-        if instructor_name.lower() == prof_name.lower():
-          found_prof = summary
-          break
-
-      if found_prof:
-        rating = float(found_prof.get('Quality', '0'))
-        difficulty = found_prof.get('Difficulty', 'N/A')
-        ratings_count = found_prof.get('Ratings', 'N/A')
-        would_take_again = found_prof.get('WouldTakeAgain', 'N/A')
-        department = found_prof.get('Department', 'Unknown')
-        url = found_prof.get('URL', '')
-
-        embed = discord.Embed(
-          title=f"Reviews for {found_prof.get('Name', instructor_name)}",
-          description=f"Professor in the **{department}** department at SFU.",
-          url=url if url else None,
-          color=discord.Color.purple(),
-        )
-        embed.add_field(
-          name="Information",
-          value=f"• Rating: {rating}/5\n"
-          f"• Difficulty: {difficulty}/5\n"
-          f"• Ratings: {ratings_count}\n"
-          f"• {would_take_again} of students Would Take Again\n",
-          inline=False,
-        )
-        await ctx.send(embed=embed)
-      else:
-        # No matching professor found
-        embed = discord.Embed(
-          title="No Reviews Found", description=f"No reviews found for '{instructor_name}'.", color=discord.Color.red()
-        )
-        embed.set_footer(text="Tip: Check spelling or try the instructor's full name.")
-        await ctx.send(embed=embed)
-    else:
-      embed = discord.Embed(
-        title="No Data Available",
-        description="Could not retrieve instructor reviews at this time.",
-        color=discord.Color.red(),
-      )
-      await ctx.send(embed=embed)
-  elif response.status == 500:
+  try:
+    data = await sfu.get_instructor_reviews()
+  except SFUApiError as err:
+    print(f"/reviews failed: {err}")
     embed = discord.Embed(
-      title="Server Error", description=f"Internal Server Error: {response.status}", color=discord.Color.red()
+      title="Error", description="Failed to fetch reviews. Try again later.", color=discord.Color.red()
     )
     await ctx.send(embed=embed)
-  else:
+    return
+
+  if not data:
     embed = discord.Embed(
-      title="Error", description=f"Failed to fetch reviews: {response.status}", color=discord.Color.red()
+      title="No Data Available",
+      description="Could not retrieve instructor reviews at this time.",
+      color=discord.Color.red(),
     )
     await ctx.send(embed=embed)
+    return
+
+  found_prof = next((s for s in data if s.get('Name', '').lower() == instructor_name.lower()), None)
+  if not found_prof:
+    embed = discord.Embed(
+      title="No Reviews Found", description=f"No reviews found for '{instructor_name}'.", color=discord.Color.red()
+    )
+    embed.set_footer(text="Tip: Check spelling or try the instructor's full name.")
+    await ctx.send(embed=embed)
+    return
+  url = found_prof.get('URL', '')
+  embed = discord.Embed(
+    title=f"Reviews for {found_prof.get('Name', instructor_name)}",
+    description=f"Professor in the **{found_prof.get('Department', 'Unknown')}** department at SFU.",
+    url=url or None,
+    color=discord.Color.purple(),
+  )
+  embed.add_field(
+    name="Information",
+    value=f"• Rating: {float(found_prof.get('Quality', '0'))}/5\n"
+    f"• Difficulty: {found_prof.get('Difficulty', 'N/A')}/5\n"
+    f"• Ratings: {found_prof.get('Ratings', 'N/A')}\n"
+    f"• {found_prof.get('WouldTakeAgain', 'N/A')} of students Would Take Again\n",
+    inline=False,
+  )
+  await ctx.send(embed=embed)
 
 
 async def main():

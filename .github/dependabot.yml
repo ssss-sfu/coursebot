@@ -6,7 +6,7 @@ updates:
       interval: weekly
     groups:
       dev-tools:
-        patterns: ["pytest*", "ruff", "aioresponses"]
+        patterns: ["pytest*", "ruff"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
