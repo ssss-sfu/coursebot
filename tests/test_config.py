@@ -62,8 +62,7 @@ def test_several_missing_variables():
     assert name in str(exc.value)
 
 
-# **valid_env is a dictionary that is merged with the valid_env dictionary
-# used to test specific values
+# {**valid_env, KEY: value} copies the valid config with one value changed
 def test_non_integer_guild_id_raises_error(valid_env):
   with pytest.raises(RuntimeError, match='GUILD_ID'):
     load({**valid_env, 'GUILD_ID': 'abc'})

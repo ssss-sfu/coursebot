@@ -9,15 +9,10 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 from src import config, study_guard
+from src.courses import presentation
 from src.sfu_api import SFUApiError, SFUClient
 
 load_dotenv()
-
-
-# helper function to parse term year
-def parse_term_year(term_code: str):
-  match = re.search(r'(\d{4})', term_code)
-  return int(match.group(1)) if match else 0
 
 
 # helper function to check the command type
@@ -101,7 +96,7 @@ async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
 
   offerings = course.get('offerings', [])
   if offerings:
-    sorted_offerings = sorted(offerings, key=lambda x: parse_term_year(x.get('term', '')), reverse=True)
+    sorted_offerings = sorted(offerings, key=lambda x: presentation.parse_term_year(x.get('term', '')), reverse=True)
     recent_offerings = sorted_offerings[:4] if len(sorted_offerings) >= 4 else sorted_offerings
     offerings_list = []
     for offering in recent_offerings:
@@ -232,14 +227,8 @@ async def get_section(ctx: commands.Context, year: int, term: str, dept: str, nu
   )
   sections = course.get('sections', [])
   if sections:
-    sections_info = []
-    for section in sections:
-      instrs = section.get('instructors', [])
-      sections_info.append(
-        f"**Section {section.get('section', 'N/A')}** - Instructors: {', '.join(instrs) if instrs else 'TBA'}"
-        f" - Schedule: {section.get('schedule', 'TBA')}"
-      )
-    embed.add_field(name="Sections:", value="\n".join(sections_info), inline=False)
+    lines = [presentation.format_section_line(s) for s in sections]
+    embed.add_field(name="Sections:", value=presentation.fit_lines(lines, presentation.FIELD_VALUE_LIMIT), inline=False)
   else:
     embed.add_field(name="Sections:", value="No sections available", inline=False)
   await ctx.send(embed=embed)
