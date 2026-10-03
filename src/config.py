@@ -1,10 +1,12 @@
+import os
+from collections.abc import Mapping
 from dataclasses import dataclass
+
 # using dataclasses to standardize the config
 from datetime import timedelta
-import os
-from typing import Mapping
 
-@dataclass(frozen=True) # immutable and hashable
+
+@dataclass(frozen=True)  # immutable and hashable
 class StudyTimeConfig:
   guild_id: int
   vc_channel_id: int
@@ -18,12 +20,14 @@ class StudyTimeConfig:
   short_stay_threshold: int
   short_stay_window_s: int
   short_stay_window_td: timedelta
-  cleanup_interval_s: int=600
+  cleanup_interval_s: int = 600
+
 
 @dataclass(frozen=True)
 class Config:
   discord_token: str
   study_time_config: StudyTimeConfig
+
 
 def _int(env, name: str, default: int) -> int:
   raw = env.get(name)
@@ -32,7 +36,7 @@ def _int(env, name: str, default: int) -> int:
   try:
     return int(raw)
   except ValueError:
-    raise RuntimeError(f"{name} must be an integer, got {raw} instead")
+    raise RuntimeError(f"{name} must be an integer, got {raw} instead") from None
 
 
 def load(env: Mapping[str, str] | None = None) -> Config:
@@ -46,7 +50,7 @@ def load(env: Mapping[str, str] | None = None) -> Config:
   token = env.get('DISCORD_TOKEN')
   if token is None or token == "":
     raise RuntimeError("DISCORD_TOKEN is required")
-  
+
   guild_id = _int(env, "GUILD_ID", 0)
   vc_channel_id = _int(env, "STUDY_TIME_VC_CHANNEL_ID", 0)
   vc_text_channel_id = _int(env, "STUDY_TIME_TEXT_CHANNEL_ID", 0)
@@ -61,7 +65,7 @@ def load(env: Mapping[str, str] | None = None) -> Config:
   short_stay_s = _int(env, "STUDY_TIME_VC_SHORT_STAY_SECONDS", 30)
   short_stay_threshold = _int(env, "STUDY_TIME_VC_SHORT_STAY_THRESHOLD", 5)
   short_stay_window_s = _int(env, "STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS", 120)
-  
+
   required = {
     "GUILD_ID": guild_id,
     "STUDY_TIME_VC_CHANNEL_ID": vc_channel_id,
@@ -113,5 +117,5 @@ def load(env: Mapping[str, str] | None = None) -> Config:
       short_stay_window_s=short_stay_window_s,
       short_stay_window_td=timedelta(seconds=short_stay_window_s),
       cleanup_interval_s=cleanup_interval_s,
-    )
+    ),
   )

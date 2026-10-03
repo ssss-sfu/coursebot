@@ -20,13 +20,18 @@ jobs:
         with:
           python-version: 3.13
       - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
       - run: pytest
-  
+
   deploy:
     name: Build, push, and deploy
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production # GitHub allows one deploy running plus one waiting if I merge PRs too fast.
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4 
 

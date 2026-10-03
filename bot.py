@@ -1,42 +1,47 @@
-from dotenv import load_dotenv
-import discord
-from discord.ext import commands
-from typing import Optional
+import asyncio
 import http.client
 import json
 import re
-import urllib.parse
-# health check imports
-import asyncio
-from aiohttp import web
-from src import study_guard, config
 import signal
+import urllib.parse
+
+import aiohttp
+import discord
+from aiohttp import web
+from discord.ext import commands
+from dotenv import load_dotenv
+
+from src import config, study_guard
+from src.sfu_api import SFUClient
 
 load_dotenv()
+
 
 # helper function to parse term year
 def parse_term_year(term_code: str):
   match = re.search(r'(\d{4})', term_code)
   return int(match.group(1)) if match else 0
 
-#helper function to check the command type
+
+# helper function to check the command type
 def get_command_type(ctx: commands.Context) -> str:
   return 'slash' if ctx.interaction else 'prefix'
+
 
 conn = http.client.HTTPSConnection("api.sfucourses.com")
 
 # Creates an instance of a client. This is our conneciton to discord.
 intents = discord.Intents.default()
-intents.message_content = True # Enable message content intent
-intents.members = True # Enable members intent
+intents.message_content = True  # Enable message content intent
+intents.members = True  # Enable members intent
 # Registers an event. This event is called when the bot has switched from offline to online.
-bot = commands.Bot(command_prefix='!', intents=intents, case_insensitive=True) # command handling
+bot = commands.Bot(command_prefix='!', intents=intents, case_insensitive=True)  # command handling
 
 
-
-#async health check
+# async health check
 async def health_check(request):
   return web.Response(text="ok", status=200)
+
 
 async def run_health_server():
   app = web.Application()
@@ -57,9 +62,7 @@ async def on_ready():
   print(f"Synced {len(synced)} command(s)")
   print("Available commands:", [cmd.name for cmd in synced])
   await study_guard.send_channel_message(
-    bot,
-    settings.study_time_config.text_channel_id,
-    'study time should be working now...'
+    bot, settings.study_time_config.text_channel_id, 'study time should be working now...'
   )
 
 
@@ -67,9 +70,11 @@ async def on_ready():
 async def on_connect():
   print("Bot connected to Discord!")
 
+
 @bot.event
 async def on_disconnect():
   print("Bot disconnected from Discord!")
+
 
 # Main Course Command
 # Gets info about a course given subject and course number
@@ -86,7 +91,7 @@ async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
   conn.request("GET", f"/v1/rest/outlines?dept={subject}&number={raw_number}")
   # stores response from API
   response = conn.getresponse()
-  
+
   if response.status == 200:
     outlines = response.read()
     if outlines == b'[]':
@@ -102,8 +107,8 @@ async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
     course = data[0]
     embed = discord.Embed(
       title=f"{course['dept']} {course['number']}: {course['title']}",
-      description = course['description'],
-      color=discord.Color.blue()
+      description=course['description'],
+      color=discord.Color.blue(),
     )
 
     offerings = course.get('offerings', [])
@@ -119,17 +124,9 @@ async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
           offerings_list.append(f"• **{term}** - Instructors: {instructor_str}")
         else:
           offerings_list.append(f"• **{term} - No instructors listed**")
-      embed.add_field(
-        name="Recent Offerings",
-        value="\n".join(offerings_list),
-        inline=False
-      )
+      embed.add_field(name="Recent Offerings", value="\n".join(offerings_list), inline=False)
     else:
-      embed.add_field(
-          name="Recent Offerings Found",
-          value="No offerings available",
-          inline=False
-      )
+      embed.add_field(name="Recent Offerings Found", value="No offerings available", inline=False)
     embed.add_field(name="Credits", value=course['units'], inline=True)
     embed.add_field(name="Prerequisites", value=course['prerequisites'] or "None", inline=True)
     await ctx.send(embed=embed)
@@ -138,17 +135,18 @@ async def get_outlines(ctx: commands.Context, subject: str, course_number: str):
   else:
     await ctx.send("An unexpected error occurred while fetching course outlines.")
 
+
 # Instructors Command
 # Returns offerings of courses taught by a specific instructor
 # Parameters: instructor full name
 #   Returns an array of instructors + their offering
 #   offering format: {department, course number, term, course title}
 @bot.hybrid_command(name='offerings', with_app_command=True, description="Get course offerings by instructor")
-async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optional[str] = None):
+async def get_offerings(ctx: commands.Context, instructor_name: str, term: str | None = None):
   encoded_name = urllib.parse.quote(instructor_name)
   conn.request("GET", f"/v1/rest/instructors?name={encoded_name}")
   response = conn.getresponse()
-  
+
   if response.status == 200:
     data = json.loads(response.read().decode('utf-8'))
     if data:
@@ -157,14 +155,10 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
         embed = discord.Embed(
           title="Multiple Instructors Found",
           description=f"Found {len(data)} instructors matching your search:",
-          color=discord.Color.orange()
+          color=discord.Color.orange(),
         )
         instructor_list = "\n".join(f"• {name}" for name in instructor_names[:10])
-        embed.add_field(
-          name="Matching Instructors:",
-          value=instructor_list,
-          inline=False
-        )
+        embed.add_field(name="Matching Instructors:", value=instructor_list, inline=False)
         command_type = get_command_type(ctx)
         if command_type == 'slash':
           embed.set_footer(text="Tip: If using /instructor, retry with instructor's full name.")
@@ -177,82 +171,76 @@ async def get_offerings(ctx: commands.Context, instructor_name: str, term: Optio
         instructor_name = instructor.get('name', 'Unknown')
         all_offerings = instructor.get('offerings', [])
         if term:
-            filtered_offerings = [
-              offering for offering in all_offerings
-              if term.lower() in offering.get('term', '').lower()
-            ]
-            show_offerings = filtered_offerings
-            if not show_offerings:
-              embed = discord.Embed(
-                title="No Offerings Found for Specified Term",
-                description=f"No offerings found for {instructor_name} in term '{term}'.",
-                color=discord.Color.red()
-              )
-              embed.add_field(
-                name="Try:",
-                value="• Check term spelling\n• Omit term to see all offerings\n",
-                inline=False
-              )
-              embed.set_footer(text="Tip: Check term spelling or omit term to see all offerings.")
-              embeds.append(embed)
-              continue
+          filtered_offerings = [
+            offering for offering in all_offerings if term.lower() in offering.get('term', '').lower()
+          ]
+          show_offerings = filtered_offerings
+          if not show_offerings:
+            embed = discord.Embed(
+              title="No Offerings Found for Specified Term",
+              description=f"No offerings found for {instructor_name} in term '{term}'.",
+              color=discord.Color.red(),
+            )
+            embed.add_field(
+              name="Try:", value="• Check term spelling\n• Omit term to see all offerings\n", inline=False
+            )
+            embed.set_footer(text="Tip: Check term spelling or omit term to see all offerings.")
+            embeds.append(embed)
+            continue
         else:
           show_offerings = all_offerings
-        offerings_list = [] 
+        offerings_list = []
         for offering in show_offerings:
           dept = offering.get('dept', 'N/A')
           number = offering.get('number', 'N/A')
           term = offering.get('term', 'N/A')
           title = offering.get('title', 'N/A')
           offerings_list.append(f"**{dept} {number}** - {title} ({term})")
-        
+
         embed = discord.Embed(
           title=f"Courses taught by {instructor_name}",
           description="\n".join(offerings_list) if offerings_list else "No offerings found.",
-          color=discord.Color.green()
+          color=discord.Color.green(),
         )
         embeds.append(embed)
       for embed in embeds[:10]:
-          await ctx.send(embed=embed)
+        await ctx.send(embed=embed)
     else:
       # No instructors found
       embed = discord.Embed(
         title="No Instructors Found",
         description=f"No instructors found with the name '{instructor_name}'",
-        color=discord.Color.red()
+        color=discord.Color.red(),
       )
       embed.set_footer(text="Tip: Check your spelling or try using instructor's full name.")
       await ctx.send(embed=embed)
   elif response.status == 404:
-    embed = discord.Embed(
-      title="Not Found",
-      description="No instructors found",
-      color=discord.Color.red()
-    )
+    embed = discord.Embed(title="Not Found", description="No instructors found", color=discord.Color.red())
     await ctx.send(embed=embed)
   else:
     embed = discord.Embed(
-      title="Server Error",
-      description=f"Internal Server Error: {response.status}",
-      color=discord.Color.red()
+      title="Server Error", description=f"Internal Server Error: {response.status}", color=discord.Color.red()
     )
     await ctx.send(embed=embed)
+
 
 # Section Command
 # Returns section info for a specific course in a specific year and term
 # Parameters: year, term, department, course number
-@bot.hybrid_command(name='section', with_app_command=True, description="Get specific course section for a specific year and term, ")
+@bot.hybrid_command(
+  name='section', with_app_command=True, description="Get specific course section for a specific year and term, "
+)
 async def get_section(ctx: commands.Context, year: int, term: str, dept: str, number: str):
   conn.request("GET", f"/v1/rest/sections?term={year}-{term}&dept={dept}&number={number}")
   response = conn.getresponse()
   if response.status == 200:
-    sections_list = response.read() # array of dept, number, sections array, term, title, and units
+    sections_list = response.read()  # array of dept, number, sections array, term, title, and units
     data = json.loads(sections_list.decode('utf-8'))
     if not data:
       embed = discord.Embed(
         title="No Sections Found",
         description=f"No sections found for {dept} {number} in {year}-{term}",
-        color=discord.Color.red()
+        color=discord.Color.red(),
       )
       await ctx.send(embed=embed)
       return
@@ -260,7 +248,7 @@ async def get_section(ctx: commands.Context, year: int, term: str, dept: str, nu
     embed = discord.Embed(
       title=f"{course['dept']} {course['number']}: {course['title']} ({year}-{term})",
       description=f"Units: {course['units']}",
-      color=discord.Color.green()
+      color=discord.Color.green(),
     )
     sections = course.get('sections', [])
     if sections:
@@ -271,55 +259,45 @@ async def get_section(ctx: commands.Context, year: int, term: str, dept: str, nu
         instrs_str = ", ".join(instrs) if instrs else "TBA"
         schedule = section.get('schedule', 'TBA')
         sections_info.append(f"**Section {sec_code}** - Instructors: {instrs_str} - Schedule: {schedule}")
-      embed.add_field(
-        name="Sections:",
-        value="\n".join(sections_info),
-        inline=False
-      )
+      embed.add_field(name="Sections:", value="\n".join(sections_info), inline=False)
     else:
-      embed.add_field(
-        name="Sections:",
-        value="No sections available",
-        inline=False
-      )
+      embed.add_field(name="Sections:", value="No sections available", inline=False)
     await ctx.send(embed=embed)
-  elif response.status==404:
+  elif response.status == 404:
     embed = discord.Embed(
       title="Not Found",
       description=f"No sections found for {dept} {number} in {year}-{term}",
-      color=discord.Color.red()
+      color=discord.Color.red(),
     )
     await ctx.send(embed=embed)
     return
-  elif response.status==400:
-    embed=discord.Embed(
-        title="Try Again",
-        description="Invalid querey parameters. " \
-        "Please make sure you use YYYY-term format. Ex. 2026-spring",
-        color=discord.Color.red()
+  elif response.status == 400:
+    embed = discord.Embed(
+      title="Try Again",
+      description="Invalid querey parameters. Please make sure you use YYYY-term format. Ex. 2026-spring",
+      color=discord.Color.red(),
     )
     await ctx.send(embed=embed)
     return
   else:
     embed = discord.Embed(
-      title="Server Error",
-      description="Internal Server Error from not this bot lol",
-      color=discord.Color.red()
+      title="Server Error", description="Internal Server Error from not this bot lol", color=discord.Color.red()
     )
     await ctx.send(embed=embed)
   return
+
 
 # Reviews Command
 # Returns a summary of review data for specified Instructor
 # Parameters: Instructor full name
 @bot.hybrid_command(name='reviews', with_app_command=True, description="Get reviews for a specific instructor")
-async def get_reviews(ctx:commands.Context, instructor_name: str):
-  conn.request("GET", f"/v1/rest/reviews/instructors") # Grabs data for ALL instructors
-  response=conn.getresponse()
+async def get_reviews(ctx: commands.Context, instructor_name: str):
+  conn.request("GET", "/v1/rest/reviews/instructors")  # Grabs data for ALL instructors
+  response = conn.getresponse()
 
-  if response.status==200:
-    #success
-    data=json.loads(response.read().decode('utf-8'))
+  if response.status == 200:
+    # success
+    data = json.loads(response.read().decode('utf-8'))
     if data:
       # Search for matching professor (case-insensitive)
       found_prof = None
@@ -328,7 +306,7 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
         if instructor_name.lower() == prof_name.lower():
           found_prof = summary
           break
-      
+
       if found_prof:
         rating = float(found_prof.get('Quality', '0'))
         difficulty = found_prof.get('Difficulty', 'N/A')
@@ -341,23 +319,21 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
           title=f"Reviews for {found_prof.get('Name', instructor_name)}",
           description=f"Professor in the **{department}** department at SFU.",
           url=url if url else None,
-          color=discord.Color.purple()
+          color=discord.Color.purple(),
         )
         embed.add_field(
           name="Information",
           value=f"• Rating: {rating}/5\n"
-                f"• Difficulty: {difficulty}/5\n"
-                f"• Ratings: {ratings_count}\n"
-                f"• {would_take_again} of students Would Take Again\n",
-          inline=False
+          f"• Difficulty: {difficulty}/5\n"
+          f"• Ratings: {ratings_count}\n"
+          f"• {would_take_again} of students Would Take Again\n",
+          inline=False,
         )
         await ctx.send(embed=embed)
       else:
         # No matching professor found
         embed = discord.Embed(
-          title="No Reviews Found",
-          description=f"No reviews found for '{instructor_name}'.",
-          color=discord.Color.red()
+          title="No Reviews Found", description=f"No reviews found for '{instructor_name}'.", color=discord.Color.red()
         )
         embed.set_footer(text="Tip: Check spelling or try the instructor's full name.")
         await ctx.send(embed=embed)
@@ -365,63 +341,59 @@ async def get_reviews(ctx:commands.Context, instructor_name: str):
       embed = discord.Embed(
         title="No Data Available",
         description="Could not retrieve instructor reviews at this time.",
-        color=discord.Color.red()
+        color=discord.Color.red(),
       )
       await ctx.send(embed=embed)
   elif response.status == 500:
     embed = discord.Embed(
-      title="Server Error",
-      description=f"Internal Server Error: {response.status}",
-      color=discord.Color.red()
+      title="Server Error", description=f"Internal Server Error: {response.status}", color=discord.Color.red()
     )
     await ctx.send(embed=embed)
   else:
     embed = discord.Embed(
-      title="Error",
-      description=f"Failed to fetch reviews: {response.status}",
-      color=discord.Color.red()
+      title="Error", description=f"Failed to fetch reviews: {response.status}", color=discord.Color.red()
     )
     await ctx.send(embed=embed)
 
 
 async def main():
-  global study_guard_client, settings
+  global study_guard_client, settings, sfu
   settings = config.load()
-
   study_guard_client = study_guard.setup(bot, settings.study_time_config)
 
-  # run the health server FIRST so App Runner health checks pass
-  await run_health_server()
-  print("Health check server is running on port 8080")
-  
-  # Loop for graceful shutdown upon receiving SIGINT or SIGTERM
-  loop = asyncio.get_running_loop() # Get the running loop
-  shutdown_event = asyncio.Event() # to request a graceful shutdown
-  for sig in (signal.SIGINT, signal.SIGTERM): # Add signal handlers for SIGINT and SIGTERM
-    loop.add_signal_handler(sig, shutdown_event.set) # for testing with ctrl+c
-  async with bot: # Start the Discord bot
-    bot_task = asyncio.create_task(bot.start(settings.discord_token)) # Create a task to start the Discord bot as a background task
-    shutdown_tasks = asyncio.create_task(shutdown_event.wait()) # Create a task to wait for the shutdown event
-    done, pending = await asyncio.wait( # whichever task completes first determines the outcome
-      {bot_task, shutdown_tasks},return_when=asyncio.FIRST_COMPLETED # Return when the first task completes
-    )
-    
-    study_time_text_channel = settings.study_time_config.text_channel_id
-    if shutdown_tasks in done:
-      print("Received shutdown signal. Shutting down...")
-      await study_guard.send_channel_message(
-        bot,
-        study_time_text_channel,
-        'restarting for an update... if study time is still broken in a few minutes, ping mehar'
-      )
-      bot_task.cancel()
-      try:
-        await bot_task
-      except asyncio.CancelledError:
-        pass
-    else:
-      # the bot task finished on its own, so we can just get the result
-      bot_task.result()
+  async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+    sfu = SFUClient(session, base_url="https://api.sfucourses.com")
+
+    # run the health server FIRST so App Runner health checks pass
+    await run_health_server()
+    print("Health check server is running on port 8080")
+
+    loop = asyncio.get_running_loop()
+    shutdown_event = asyncio.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+      loop.add_signal_handler(sig, shutdown_event.set)
+
+    async with bot:
+      bot_task = asyncio.create_task(bot.start(settings.discord_token))
+      shutdown_task = asyncio.create_task(shutdown_event.wait())
+      done, _ = await asyncio.wait({bot_task, shutdown_task}, return_when=asyncio.FIRST_COMPLETED)
+
+      if shutdown_task in done:
+        print("Received shutdown signal. Shutting down...")
+        await study_guard.send_channel_message(
+          bot,
+          settings.study_time_config.text_channel_id,
+          'restarting for an update... if study time is still broken in a few minutes, ping mehar',
+        )
+        bot_task.cancel()
+        try:
+          await bot_task
+        except asyncio.CancelledError:
+          pass
+      else:
+        bot_task.result()
+  # leaving the session block closes the HTTP session, after the bot has shut down
+
 
 if __name__ == '__main__':
   asyncio.run(main())
