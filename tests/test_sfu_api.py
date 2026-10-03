@@ -94,6 +94,7 @@ async def test_non_200_raises_with_status(api, session, status):
     await SFUClient(session, api.base_url).get_json("/v1/rest/outlines")
   assert exc.value.status == status
 
+
 @pytest.mark.asyncio
 async def test_timeout_raises_without_status(api):
   async def slow():
