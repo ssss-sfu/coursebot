@@ -1,3 +1,20 @@
 [tool.pytest.ini_options]
 testpaths=["tests"]
 pythonpath=["."]
+
+[tool.ruff]
+target-version = "py313"
+indent-width = 2
+line-length = 120
+extend-exclude = ["venv"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "ASYNC"]
+# F&E: undefined names, unused imports & variables
+# I = import sorting
+# UP = modern syntax for updated Python
+# B = common bug patterns
+# ASYNC = blocking calls inside async code flags
+
+[tool.ruff.format]
+quote-style = "preserve"

@@ -1,17 +1,22 @@
+from collections import defaultdict
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
+from typing import NamedTuple
+
 import discord
 from discord.ext import tasks
-from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+
 from src.config import StudyTimeConfig
-from typing import NamedTuple, Callable, Awaitable
 
 is_study_guard_initialized = False
+
 
 # Represents the Study Guard client
 # This class is used to initialize the Study Guard client
 # It contains the on_ready function which is called when the bot is ready
 class StudyGuardClient(NamedTuple):
-  on_ready: Callable[[discord.Client], Awaitable[None]] 
+  on_ready: Callable[[discord.Client], Awaitable[None]]
+
 
 def format_eta(seconds: int) -> str:
   minutes, secs = divmod(seconds, 60)
@@ -25,14 +30,14 @@ def prune_timestamps(timestamps: list[datetime], window_start: datetime) -> list
 async def send_dm(member: discord.Member, message: str):
   try:
     await member.send(message)
-  except:
+  except discord.HTTPException:
     # Gracefully fail
     print(f'Encountered error sending message to user "{member.name}"')
 
 
 async def send_channel_message(client: discord.Client, channelId: int, message: str):
   channel = client.get_channel(channelId)
-  if channel and type(channel) == discord.TextChannel:
+  if channel and isinstance(channel, discord.TextChannel):
     await channel.send(f'[STUDY TIME]: {message}')
   else:
     print(f'Failed to send message to channel {channelId}')
@@ -43,7 +48,7 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
   if is_study_guard_initialized:
     raise RuntimeError('This has already been called')
   is_study_guard_initialized = True
-  
+
   guild_id = config.guild_id
   vc_channel_id = config.vc_channel_id
   moderation_channel_id = config.moderation_channel_id
@@ -56,18 +61,17 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
   short_stay_window_s = config.short_stay_window_s
   short_stay_window_td = config.short_stay_window_td
   cleanup_interval_s = config.cleanup_interval_s
-  
+
   join_history: dict[int, list[datetime]] = defaultdict(list)
   short_stay_history: dict[int, list[datetime]] = defaultdict(list)
   user_joined_at: dict[int, datetime] = {}
   study_time_role = None
 
-
   @tasks.loop(seconds=cleanup_interval_s)
   async def cleanup_stale_history():
     # Avoid DoS or other weird stuff
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     join_window_start = now - join_limit_window_td
     short_stay_window_start = now - short_stay_window_td
@@ -87,7 +91,6 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
     for user_id in list(user_joined_at.keys()):
       if user_joined_at[user_id] < stale_threshold:
         del user_joined_at[user_id]
-
 
   async def on_ready(bot: discord.Client):
     nonlocal study_time_role
@@ -124,16 +127,15 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
             await member.add_roles(study_time_role)
         except Exception as e:
           print(e)
-      
+
       await send_channel_message(
         bot,
         moderation_channel_id,
-        f'Done initializing for Study Time. Auto assigned {study_time_role} role to {added_roles} members and removed from {removed_roles} other members.'
+        f'Done initializing for Study Time. Auto assigned {study_time_role} role to {added_roles} members and removed from {removed_roles} other members.',
       )
-        
+
     else:
       raise RuntimeError('Cannot initialize Study Time bot')
-    
 
   @bot.event
   async def on_voice_state_update(
@@ -144,7 +146,7 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
     if not study_time_role:
       raise RuntimeError('Study Time Role is missing. Initialization failed')
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await bot.wait_until_ready()
 
     new_channel_id = after.channel.id if after.channel else None
@@ -155,11 +157,8 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
 
     try:
       if is_joined:
-
         # Prune join history and check frequency limit
-        join_history[member.id] = prune_timestamps(
-          join_history[member.id], now - join_limit_window_td
-        )
+        join_history[member.id] = prune_timestamps(join_history[member.id], now - join_limit_window_td)
 
         # Check join frequency limit before recording this join (AVOID DoS)
         if len(join_history[member.id]) >= join_limit_count:
@@ -178,9 +177,7 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
         join_history[member.id].append(now)
 
         # Check short-stay abuse
-        short_stay_history[member.id] = prune_timestamps(
-          short_stay_history[member.id], now - short_stay_window_td
-        )
+        short_stay_history[member.id] = prune_timestamps(short_stay_history[member.id], now - short_stay_window_td)
         if len(short_stay_history[member.id]) >= short_stay_threshold:
           oldest = short_stay_history[member.id][0]
           remaining = max(1, int((oldest + short_stay_window_td - now).total_seconds()))
@@ -198,24 +195,31 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
         try:
           await member.add_roles(study_time_role)
         except Exception as e:
-          await send_channel_message(bot, moderation_channel_id, f"[ERROR] Failed to add role {study_time_role.name} to {member.name} ({member.id}): {e}")
+          await send_channel_message(
+            bot,
+            moderation_channel_id,
+            f"[ERROR] Failed to add role {study_time_role.name} to {member.name} ({member.id}): {e}",
+          )
 
       elif is_left:
         # Record short stay if applicable
         join_time = user_joined_at.pop(member.id, None)
         short_stay_duration = (now - join_time).total_seconds() if join_time is not None else None
         if (short_stay_duration is not None) and (short_stay_duration < short_stay_s):
-          short_stay_history[member.id] = prune_timestamps(
-            short_stay_history[member.id], now - short_stay_window_td
-          )
+          short_stay_history[member.id] = prune_timestamps(short_stay_history[member.id], now - short_stay_window_td)
           short_stay_history[member.id].append(now)
 
         try:
           await member.remove_roles(study_time_role)
         except Exception as e:
-          await send_channel_message(bot, moderation_channel_id, f"[ERROR] Failed to remove role ${study_time_role.name} from {member.name} ({member.id}): {e}")
+          await send_channel_message(
+            bot,
+            moderation_channel_id,
+            f"[ERROR] Failed to remove role ${study_time_role.name} from {member.name} ({member.id}): {e}",
+          )
     except Exception as error:
-      await send_channel_message(bot, moderation_channel_id, f"[ERROR] An error occurred while processing role change: {error}")
-
+      await send_channel_message(
+        bot, moderation_channel_id, f"[ERROR] An error occurred while processing role change: {error}"
+      )
 
   return StudyGuardClient(on_ready=on_ready)
