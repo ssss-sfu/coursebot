@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from src import config, study_guard
 from src.cogs.courses import Courses
+from src.errors import handle_app_command_error
 from src.sfu_api import SFUClient
 
 load_dotenv()
@@ -19,6 +20,7 @@ intents = discord.Intents.default()
 intents.members = True  # Enable members intent
 # Registers an event. This event is called when the bot has switched from offline to online.
 bot = commands.Bot(command_prefix=commands.when_mentioned, intents=intents)
+bot.tree.error(handle_app_command_error)
 
 
 # async health check

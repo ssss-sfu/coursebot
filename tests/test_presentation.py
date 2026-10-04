@@ -1,6 +1,15 @@
 import pytest
 
-from src.courses.presentation import FIELD_VALUE_LIMIT, fit_lines, format_section_line, parse_term_year
+from src.courses.presentation import (
+  DESCRIPTION_LIMIT,
+  FIELD_VALUE_LIMIT,
+  build_offerings_pages,
+  fit_lines,
+  format_section_line,
+  group_offerings_by_year,
+  parse_term_year,
+  term_sort_key,
+)
 
 
 @pytest.fixture
@@ -137,3 +146,59 @@ def test_oversized_real_course_fits_in_a_field(cmpt225_sections):
   result = fit_lines([format_section_line(s) for s in sections], FIELD_VALUE_LIMIT)
   assert len(result) <= FIELD_VALUE_LIMIT
   assert "more" in result.splitlines()[-1]
+
+
+# offerings grouped by year
+
+
+def offering(term, number="120"):
+  return {"dept": "CMPT", "number": number, "title": "Intro", "term": term}
+
+
+@pytest.mark.parametrize(
+  ("term", "key"),
+  [("Fall 2026", (2026, 3)), ("Summer 2026", (2026, 2)), ("spring 2026", (2026, 1)), ("2026", (2026, 0)), ("", (0, 0))],
+)
+def test_term_sort_key(term, key):
+  assert term_sort_key(term) == key
+
+
+def test_groups_newest_year_first_and_skips_missing_years():
+  groups = group_offerings_by_year([offering("Spring 2024"), offering("Fall 2027"), offering("Fall 2024")])
+  assert [year for year, _ in groups] == [2027, 2024]
+
+
+def test_terms_within_a_year_newest_first():
+  [(_, year_offerings)] = group_offerings_by_year(
+    [offering("Spring 2026"), offering("Fall 2026"), offering("Summer 2026")]
+  )
+  assert [o["term"] for o in year_offerings] == ["Fall 2026", "Summer 2026", "Spring 2026"]
+
+
+def test_offerings_without_a_year_go_last():
+  groups = group_offerings_by_year([offering("TBA"), offering("Fall 2025")])
+  assert [year for year, _ in groups] == [2025, 0]
+
+
+def test_real_fraser_offerings_grouped(load_fixture):
+  offerings = load_fixture("instructors_fraser")[0]["offerings"]
+  groups = group_offerings_by_year(offerings)
+  assert sum(len(g) for _, g in groups) == len(offerings)
+  assert [y for y, _ in groups] == sorted({parse_term_year(o["term"]) for o in offerings}, reverse=True)
+
+
+def test_build_offerings_pages_titles_and_footers():
+  pages = build_offerings_pages("Jane Smith", [offering("Fall 2026"), offering("TBA", number="999")])
+  assert [p.title for p in pages] == ["Courses taught by Jane Smith · 2026", "Courses taught by Jane Smith · Other"]
+  assert [p.footer.text for p in pages] == ["Page 1/2 · 2026", "Page 2/2 · Other"]
+  assert pages[0].description == "**CMPT 120** - Intro (Fall 2026)"
+
+
+def test_single_year_page_has_no_footer():
+  [page] = build_offerings_pages("Jane Smith", [offering("Fall 2026")])
+  assert page.footer.text is None
+
+
+def test_huge_year_still_fits_description_limit():
+  [page] = build_offerings_pages("Jane Smith", [offering("Fall 2026", number=str(i)) for i in range(500)])
+  assert len(page.description) <= DESCRIPTION_LIMIT

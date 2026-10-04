@@ -134,3 +134,43 @@ async def test_reviews_error_propagates_and_is_not_cached(api, session):
   with pytest.raises(SFUApiError):
     await client.get_instructor_reviews()
   assert await client.get_instructor_reviews() == [{"Name": "Brian Fraser"}]
+
+
+# get_departments
+
+
+@pytest.mark.asyncio
+async def test_departments_sorted_and_unique(api, session):
+  api.respond(lambda: web.json_response([{"dept": "MATH"}, {"dept": "CMPT"}, {"dept": "CMPT"}, {"dept": ""}, {}]))
+  assert await SFUClient(session, api.base_url).get_departments() == ["CMPT", "MATH"]
+  assert api.requests[0].path == "/v1/rest/outlines"
+  assert dict(api.requests[0].query) == {}
+
+
+@pytest.mark.asyncio
+async def test_departments_cached(api, session):
+  api.respond(lambda: web.json_response([{"dept": "CMPT"}]))
+  client = SFUClient(session, api.base_url)
+  await client.get_departments()
+  assert await client.get_departments() == ["CMPT"]
+  assert len(api.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_departments_and_reviews_cached_separately(api, session):
+  api.respond(lambda: web.json_response([{"dept": "CMPT"}]))
+  api.respond(lambda: web.json_response([{"Name": "Brian Fraser"}]))
+  client = SFUClient(session, api.base_url)
+  assert await client.get_departments() == ["CMPT"]
+  assert await client.get_instructor_reviews() == [{"Name": "Brian Fraser"}]
+  assert [r.path for r in api.requests] == ["/v1/rest/outlines", "/v1/rest/reviews/instructors"]
+
+
+@pytest.mark.asyncio
+async def test_departments_error_not_cached(api, session):
+  api.respond(lambda: web.Response(status=500))
+  api.respond(lambda: web.json_response([{"dept": "CMPT"}]))
+  client = SFUClient(session, api.base_url)
+  with pytest.raises(SFUApiError):
+    await client.get_departments()
+  assert await client.get_departments() == ["CMPT"]

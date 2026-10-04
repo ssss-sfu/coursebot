@@ -2,8 +2,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from aiohttp import web
+from discord import app_commands
 
 from src.cogs.courses import Courses
+from src.courses.pagination import EmbedPaginator
 from src.courses.presentation import DESCRIPTION_LIMIT, FIELD_VALUE_LIMIT, parse_term_year
 from src.sfu_api import SFUClient
 
@@ -201,18 +203,60 @@ def fraser(load_fixture):
 
 
 @pytest.mark.asyncio
-async def test_offerings_success_lists_every_offering(cog, api, fraser):
+async def test_offerings_real_data_paged_by_year(cog, api, fraser):
   api.respond(lambda: web.json_response(fraser))
   interaction = make_interaction()
   await run_offerings(cog, interaction, "Brian Fraser")
 
   assert interaction.calls == ["defer", "send"]
-  _, embed = sent(interaction)
-  assert embed.title == "Courses taught by Brian Fraser"
-  lines = embed.description.splitlines()
-  assert len(lines) == len(fraser[0]["offerings"])
-  first = fraser[0]["offerings"][0]
-  assert lines[0] == f"**{first['dept']} {first['number']}** - {first['title']} ({first['term']})"
+  call = interaction.followup.send.call_args
+  view = call.kwargs["view"]
+  assert isinstance(view, EmbedPaginator)
+  assert call.kwargs["wait"] is True  # so the paginator gets the message back and can disable buttons later
+
+  years = sorted({parse_term_year(o["term"]) for o in fraser[0]["offerings"]}, reverse=True)
+  assert [p.title for p in view.pages] == [f"Courses taught by Brian Fraser · {y}" for y in years]
+  assert call.kwargs["embed"] is view.pages[0]
+  assert view.pages[0].footer.text == f"Page 1/{len(years)} · {years[0]}"
+  assert sum(len(p.description.splitlines()) for p in view.pages) == len(fraser[0]["offerings"])
+
+
+@pytest.mark.asyncio
+async def test_offerings_skips_years_without_offerings(cog, api):
+  offerings = [offering(number="120", term="Fall 2027"), offering(number="225", term="Spring 2024")]
+  api.respond(lambda: web.json_response([instructor(offerings=offerings)]))
+  interaction = make_interaction()
+  await run_offerings(cog, interaction, "Jane Smith")
+  pages = interaction.followup.send.call_args.kwargs["view"].pages
+  assert [p.title.rsplit(" ", 1)[-1] for p in pages] == ["2027", "2024"]
+
+
+@pytest.mark.asyncio
+async def test_offerings_single_year_has_no_buttons(cog, api):
+  offerings = [offering(number="120", term="Fall 2026"), offering(number="225", term="Spring 2026")]
+  api.respond(lambda: web.json_response([instructor(offerings=offerings)]))
+  interaction = make_interaction()
+  await run_offerings(cog, interaction, "Jane Smith")
+  call = interaction.followup.send.call_args
+  assert "view" not in call.kwargs
+  assert call.kwargs["embed"].title == "Courses taught by Jane Smith · 2026"
+  assert call.kwargs["embed"].footer.text is None
+  assert call.kwargs["embed"].description.splitlines()[0].endswith("(Fall 2026)")  # fall before spring
+
+
+@pytest.mark.asyncio
+async def test_offerings_term_filter_applies_before_paging(cog, api):
+  offerings = [
+    offering(number="120", term="Fall 2026"),
+    offering(number="225", term="Spring 2026"),
+    offering(number="276", term="Fall 2025"),
+  ]
+  api.respond(lambda: web.json_response([instructor(offerings=offerings)]))
+  interaction = make_interaction()
+  await run_offerings(cog, interaction, "Jane Smith", "fall")
+  pages = interaction.followup.send.call_args.kwargs["view"].pages
+  assert len(pages) == 2
+  assert all("Spring" not in p.description for p in pages)
 
 
 @pytest.mark.asyncio
@@ -301,7 +345,8 @@ async def test_offerings_api_error(cog, api):
 
 
 async def run_section(cog, interaction, year=2026, term="fall", dept="CMPT", number="225"):
-  await cog.section.callback(cog, interaction, year, term, dept, number)
+  # slash-command choices arrive as Choice objects, not plain strings
+  await cog.section.callback(cog, interaction, year, app_commands.Choice(name=term.title(), value=term), dept, number)
 
 
 @pytest.fixture
@@ -368,7 +413,7 @@ async def test_section_course_without_sections(cog, api):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("status", "title"), [(400, "Try Again"), (500, "Server Error"), (503, "Server Error")])
+@pytest.mark.parametrize(("status", "title"), [(400, "Server Error"), (500, "Server Error"), (503, "Server Error")])
 async def test_section_api_errors(cog, api, status, title):
   api.respond(lambda: web.Response(status=status))
   interaction = make_interaction()
@@ -466,3 +511,106 @@ async def test_reviews_second_call_uses_cache(cog, api, fraser_reviews):
   _, embed = sent(interaction)
   assert embed.title == "Reviews for Brian Fraser"
   assert len(api.requests) == 1
+
+
+# department autocomplete (/course subject, /section dept)
+
+
+def outlines_for(*depts):
+  return [{"dept": d, "number": "100"} for d in depts]
+
+
+@pytest.mark.asyncio
+async def test_course_subject_autocomplete_filters_departments(cog, api):
+  api.respond(lambda: web.json_response(outlines_for("CMPT", "MATH", "CHEM", "MACM", "CMPT")))
+  choices = await cog.course_subject_autocomplete(make_interaction(), "c")
+  assert [c.value for c in choices] == ["CHEM", "CMPT", "MACM"]  # prefix matches, then substring
+  assert api.requests[0].path == "/v1/rest/outlines"
+
+
+@pytest.mark.asyncio
+async def test_section_dept_autocomplete_filters_departments(cog, api):
+  api.respond(lambda: web.json_response(outlines_for("CMPT", "MATH")))
+  choices = await cog.section_dept_autocomplete(make_interaction(), "ma")
+  assert [c.value for c in choices] == ["MATH"]
+
+
+@pytest.mark.asyncio
+async def test_autocomplete_uses_cached_departments(cog, api):
+  api.respond(lambda: web.json_response(outlines_for("CMPT", "MATH")))  # only one response queued
+  await cog.course_subject_autocomplete(make_interaction(), "c")
+  await cog.section_dept_autocomplete(make_interaction(), "m")
+  assert len(api.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_autocomplete_api_error_returns_no_choices(cog, api):
+  api.respond(lambda: web.Response(status=500))
+  assert await cog.course_subject_autocomplete(make_interaction(), "c") == []
+
+
+@pytest.mark.asyncio
+async def test_autocomplete_caps_at_25_choices(cog, api):
+  api.respond(lambda: web.json_response(outlines_for(*[f"D{i:02}" for i in range(40)])))
+  choices = await cog.course_subject_autocomplete(make_interaction(), "")
+  assert len(choices) == 25
+
+
+# /reviews: "did you mean" and shared names
+
+
+def prof(name, department="Computer Science", url="https://example.com/1"):
+  return {
+    "Name": name,
+    "Department": department,
+    "URL": url,
+    "Quality": "4.0",
+    "Difficulty": "3.0",
+    "Ratings": "10",
+    "WouldTakeAgain": "80%",
+  }
+
+
+@pytest.mark.asyncio
+async def test_reviews_not_found_suggests_close_spelling(cog, api):
+  api.respond(lambda: web.json_response([prof("Brian Fraser"), prof("Diana Cukierman")]))
+  interaction = make_interaction()
+  await run_reviews(cog, interaction, "Brian Frazer")
+  _, embed = sent(interaction)
+  assert embed.title == "No Reviews Found"
+  suggestions = {f.name: f.value for f in embed.fields}["Did you mean?"]
+  assert suggestions == "• Brian Fraser"
+
+
+@pytest.mark.asyncio
+async def test_reviews_last_name_only_suggests_full_name(cog, api):
+  api.respond(lambda: web.json_response([prof("Brian Fraser"), prof("Diana Cukierman")]))
+  interaction = make_interaction()
+  await run_reviews(cog, interaction, "fraser")
+  _, embed = sent(interaction)
+  assert {f.name: f.value for f in embed.fields}["Did you mean?"] == "• Brian Fraser"
+
+
+@pytest.mark.asyncio
+async def test_reviews_not_found_without_suggestions(cog, api):
+  api.respond(lambda: web.json_response([prof("Brian Fraser")]))
+  interaction = make_interaction()
+  await run_reviews(cog, interaction, "Zzzz Notaprof")
+  _, embed = sent(interaction)
+  assert embed.fields == []
+
+
+@pytest.mark.asyncio
+async def test_reviews_shared_name_shows_every_professor(cog, api):
+  api.respond(
+    lambda: web.json_response(
+      [prof("Jason Brown", "Humanities", url=""), prof("Jason Brown", "Religious Studies"), prof("Someone Else")]
+    )
+  )
+  interaction = make_interaction()
+  await run_reviews(cog, interaction, "jason brown")
+  _, embed = sent(interaction)
+  assert embed.title == "2 professors named Jason Brown"
+  assert [f.name for f in embed.fields] == ["Humanities", "Religious Studies"]
+  assert "[RateMyProfessors]" not in embed.fields[0].value  # no URL for the first one
+  assert "[RateMyProfessors](https://example.com/1)" in embed.fields[1].value

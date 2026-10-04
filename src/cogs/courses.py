@@ -5,12 +5,24 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.courses import presentation
+from src.courses.pagination import send_pages
+from src.courses.search import filter_departments, suggest_names
 from src.sfu_api import SFUApiError, SFUClient
+
+TERMS = [app_commands.Choice(name=term.title(), value=term) for term in ("spring", "summer", "fall")]
 
 
 class Courses(commands.Cog):
   def __init__(self, sfu: SFUClient):
     self.sfu = sfu
+
+  async def department_choices(self, current: str) -> list[app_commands.Choice[str]]:
+    try:
+      departments = await self.sfu.get_departments()
+    except SFUApiError as err:
+      print(f"department autocomplete failed: {err}")
+      return []  # suggestions are optional; the user can still type a code
+    return [app_commands.Choice(name=d, value=d) for d in filter_departments(departments, current)]
 
   # Main Course Command
   # Gets info about a course given subject and course number
@@ -61,6 +73,10 @@ class Courses(commands.Cog):
     embed.add_field(name="Credits", value=course['units'], inline=True)
     embed.add_field(name="Prerequisites", value=course['prerequisites'] or "None", inline=True)
     await interaction.followup.send(embed=embed)
+
+  @course.autocomplete("subject")
+  async def course_subject_autocomplete(self, interaction: discord.Interaction, current: str):
+    return await self.department_choices(current)
 
   # Instructors Command
   # Returns offerings of courses taught by a specific instructor
@@ -119,41 +135,39 @@ class Courses(commands.Cog):
         await interaction.followup.send(embed=embed)
         return
 
-    offerings_list = [
-      f"**{o.get('dept', 'N/A')} {o.get('number', 'N/A')}** - {o.get('title', 'N/A')} ({o.get('term', 'N/A')})"
-      for o in offerings
-    ]
-    embed = discord.Embed(
-      title=f"Courses taught by {name}",
-      description=presentation.fit_lines(offerings_list, presentation.DESCRIPTION_LIMIT) or "No offerings found.",
-      color=discord.Color.green(),
-    )
-    await interaction.followup.send(embed=embed)
+    if not offerings:
+      embed = discord.Embed(
+        title=f"Courses taught by {name}", description="No offerings found.", color=discord.Color.green()
+      )
+      await interaction.followup.send(embed=embed)
+      return
+
+    await send_pages(interaction, presentation.build_offerings_pages(name, offerings))
 
   # Section Command
   # Returns section info for a specific course in a specific year and term
   @app_commands.command(name='section', description="Get course sections for a specific year and term")
-  @app_commands.describe(
-    year="Year, e.g. 2026", term="spring, summer, or fall", dept="Department code, e.g. CMPT", number="Course number"
-  )
-  async def section(self, interaction: discord.Interaction, year: int, term: str, dept: str, number: str):
+  @app_commands.describe(year="Year, e.g. 2026", term="Term", dept="Department code, e.g. CMPT", number="Course number")
+  @app_commands.choices(term=TERMS)
+  async def section(
+    self,
+    interaction: discord.Interaction,
+    year: app_commands.Range[int, 2000, 2100],
+    term: app_commands.Choice[str],
+    dept: str,
+    number: str,
+  ):
     await interaction.response.defer()
+    term = term.value
     try:
       data = await self.sfu.get_json(
         "/v1/rest/sections", params={"term": f"{year}-{term}", "dept": dept, "number": number}
       )
     except SFUApiError as err:
       print(f"/section failed: {err}")
-      if err.status == 400:
-        embed = discord.Embed(
-          title="Try Again",
-          description="Invalid query parameters. Please make sure you use YYYY-term format. Ex. 2026-spring",
-          color=discord.Color.red(),
-        )
-      else:
-        embed = discord.Embed(
-          title="Server Error", description="Internal Server Error from not this bot lol", color=discord.Color.red()
-        )
+      embed = discord.Embed(
+        title="Server Error", description="Internal Server Error from not this bot lol", color=discord.Color.red()
+      )
       await interaction.followup.send(embed=embed)
       return
 
@@ -182,6 +196,10 @@ class Courses(commands.Cog):
       embed.add_field(name="Sections:", value="No sections available", inline=False)
     await interaction.followup.send(embed=embed)
 
+  @section.autocomplete("dept")
+  async def section_dept_autocomplete(self, interaction: discord.Interaction, current: str):
+    return await self.department_choices(current)
+
   # Reviews Command
   # Returns a summary of review data for specified Instructor
   @app_commands.command(name='reviews', description="Get reviews for a specific instructor")
@@ -207,15 +225,36 @@ class Courses(commands.Cog):
       await interaction.followup.send(embed=embed)
       return
 
-    found_prof = next((s for s in data if s.get('Name', '').lower() == instructor_name.strip().lower()), None)
-    if not found_prof:
+    query = instructor_name.strip().lower()
+    matches = [s for s in data if s.get('Name', '').strip().lower() == query]
+    if not matches:
       embed = discord.Embed(
         title="No Reviews Found", description=f"No reviews found for '{instructor_name}'.", color=discord.Color.red()
       )
+      suggestions = suggest_names(instructor_name, [s.get('Name', '') for s in data])
+      if suggestions:
+        embed.add_field(name="Did you mean?", value="\n".join(f"• {s}" for s in suggestions), inline=False)
       embed.set_footer(text="Tip: Check spelling or try the instructor's full name.")
       await interaction.followup.send(embed=embed)
       return
 
+    if len(matches) > 1:
+      # different professors share this name (usually in different departments): show each one
+      embed = discord.Embed(
+        title=f"{len(matches)} professors named {matches[0].get('Name', instructor_name)}",
+        color=discord.Color.purple(),
+      )
+      for prof in matches[:25]:
+        url = prof.get('URL', '')
+        embed.add_field(
+          name=prof.get('Department', 'Unknown department'),
+          value=format_rating(prof) + (f"\n[RateMyProfessors]({url})" if url else ""),
+          inline=False,
+        )
+      await interaction.followup.send(embed=embed)
+      return
+
+    found_prof = matches[0]
     url = found_prof.get('URL', '')
     embed = discord.Embed(
       title=f"Reviews for {found_prof.get('Name', instructor_name)}",
@@ -223,12 +262,14 @@ class Courses(commands.Cog):
       url=url or None,
       color=discord.Color.purple(),
     )
-    embed.add_field(
-      name="Information",
-      value=f"• Rating: {found_prof.get('Quality', 'N/A')}/5\n"
-      f"• Difficulty: {found_prof.get('Difficulty', 'N/A')}/5\n"
-      f"• Ratings: {found_prof.get('Ratings', 'N/A')}\n"
-      f"• {found_prof.get('WouldTakeAgain', 'N/A')} of students Would Take Again\n",
-      inline=False,
-    )
+    embed.add_field(name="Information", value=format_rating(found_prof), inline=False)
     await interaction.followup.send(embed=embed)
+
+
+def format_rating(prof: dict) -> str:
+  return (
+    f"• Rating: {prof.get('Quality', 'N/A')}/5\n"
+    f"• Difficulty: {prof.get('Difficulty', 'N/A')}/5\n"
+    f"• Ratings: {prof.get('Ratings', 'N/A')}\n"
+    f"• {prof.get('WouldTakeAgain', 'N/A')} of students Would Take Again"
+  )
