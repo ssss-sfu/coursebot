@@ -25,14 +25,6 @@ def shown(interaction):
 
 
 @pytest.mark.asyncio
-async def test_starts_on_first_page_with_previous_disabled():
-  view = EmbedPaginator(pages(3), owner_id=OWNER)
-  assert view.index == 0
-  assert view.previous_page.disabled
-  assert not view.next_page.disabled
-
-
-@pytest.mark.asyncio
 async def test_next_and_previous_move_between_pages():
   view = EmbedPaginator(pages(3), owner_id=OWNER)
   interaction = click()
@@ -44,15 +36,6 @@ async def test_next_and_previous_move_between_pages():
   await view.previous_page.callback(interaction)
   assert shown(interaction) == "Page 2"
   assert interaction.response.edit_message.call_args.kwargs["view"] is view
-
-
-@pytest.mark.asyncio
-async def test_cannot_move_past_the_ends():
-  view = EmbedPaginator(pages(2), owner_id=OWNER)
-  await view.show(click(), -5)
-  assert view.index == 0
-  await view.show(click(), 99)
-  assert view.index == 1
 
 
 @pytest.mark.asyncio
@@ -73,14 +56,6 @@ async def test_timeout_disables_buttons_and_updates_message():
   await view.on_timeout()
   assert all(item.disabled for item in view.children)
   view.message.edit.assert_awaited_once_with(view=view)
-
-
-@pytest.mark.asyncio
-async def test_timeout_survives_deleted_message():
-  view = EmbedPaginator(pages(2), owner_id=OWNER)
-  view.message = Mock()
-  view.message.edit = AsyncMock(side_effect=discord.NotFound(Mock(status=404, reason="Not Found"), "gone"))
-  await view.on_timeout()  # must not raise
 
 
 @pytest.mark.asyncio

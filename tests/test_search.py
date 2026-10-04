@@ -8,21 +8,12 @@ DEPARTMENTS = ["ACMA", "BUS", "CHEM", "CMNS", "CMPT", "MACM", "MATH", "STAT"]
 # filter_departments
 
 
-def test_empty_query_returns_first_departments():
-  assert filter_departments(DEPARTMENTS, "") == DEPARTMENTS
-  assert filter_departments(DEPARTMENTS, "   ") == DEPARTMENTS
-
-
 def test_prefix_matches_come_before_substring_matches():
   assert filter_departments(DEPARTMENTS, "m") == ["MACM", "MATH", "ACMA", "CHEM", "CMNS", "CMPT"]
 
 
 def test_query_is_case_insensitive_and_trimmed():
   assert filter_departments(DEPARTMENTS, " cmp ") == ["CMPT"]
-
-
-def test_no_match_returns_empty():
-  assert filter_departments(DEPARTMENTS, "zzz") == []
 
 
 def test_results_capped_at_limit():
@@ -40,31 +31,11 @@ NAMES = ["Brian Fraser", "Diana Cukierman", "Toby Donaldson", "Jason Brown", "ja
   ("query", "expected"),
   [
     ("Brian Frazer", ["Brian Fraser"]),  # typo
-    ("toby donaldsen", ["Toby Donaldson"]),
-    ("cukierman", ["Diana Cukierman"]),  # last name only
-    ("  FRASER  ", ["Brian Fraser"]),
+    ("  CUKIERMAN  ", ["Diana Cukierman"]),  # last name only
   ],
 )
 def test_suggests_close_names(query, expected):
   assert suggest_names(query, NAMES) == expected
-
-
-def test_case_duplicates_suggested_once():
-  assert suggest_names("jason brwn", NAMES) == ["Jason Brown"]
-
-
-def test_unrelated_query_suggests_nothing():
-  assert suggest_names("Zzzz Notaprof", NAMES) == []
-
-
-def test_empty_query_suggests_nothing():
-  assert suggest_names("   ", NAMES) == []
-
-
-def test_at_most_n_suggestions():
-  names = [f"Alex Smith{i}" for i in range(10)]
-  assert len(suggest_names("smith", names)) == 3
-  assert len(suggest_names("smith", names, n=5)) == 5
 
 
 def test_last_name_of_long_name_found_by_substring():

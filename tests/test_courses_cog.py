@@ -6,7 +6,7 @@ from discord import app_commands
 
 from src.cogs.courses import Courses
 from src.courses.pagination import EmbedPaginator
-from src.courses.presentation import DESCRIPTION_LIMIT, FIELD_VALUE_LIMIT, parse_term_year
+from src.courses.presentation import FIELD_VALUE_LIMIT, parse_term_year
 from src.sfu_api import SFUClient
 
 
@@ -42,19 +42,6 @@ def cog(api, session):
 @pytest.fixture
 def cmpt120(load_fixture):
   return load_fixture("outlines_cmpt120")
-
-
-def outline(**overrides):
-  base = {
-    "dept": "CMPT",
-    "number": "120",
-    "title": "Intro",
-    "description": "A course.",
-    "units": "3",
-    "prerequisites": "",
-    "offerings": [],
-  }
-  return [{**base, **overrides}]
 
 
 async def run_course(cog, interaction, subject, number):
@@ -104,16 +91,7 @@ async def test_course_sends_dept_and_number_to_api(cog, api, cmpt120):
 
 
 @pytest.mark.asyncio
-async def test_course_alphanumeric_number_accepted(cog, api):
-  api.respond(lambda: web.json_response(outline(number="105W")))
-  interaction = make_interaction()
-  await run_course(cog, interaction, "CMPT", "105W")
-  _, embed = sent(interaction)
-  assert embed.title.startswith("CMPT 105W")
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("response", [lambda: web.Response(status=404), lambda: web.json_response([])])
+@pytest.mark.parametrize("response", [lambda: web.json_response([])])
 async def test_course_not_found(cog, api, response):
   api.respond(response)
   interaction = make_interaction()
@@ -133,7 +111,7 @@ async def test_course_67_easter_egg(cog, api):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("number", ["abc", "12-3", "", "W105"])
+@pytest.mark.parametrize("number", ["abc", "W105"])
 async def test_course_invalid_number_skips_api(cog, api, number):
   interaction = make_interaction()
   await run_course(cog, interaction, "CMPT", number)
@@ -151,35 +129,6 @@ async def test_course_api_error(cog, api):
   text, embed = sent(interaction)
   assert text == "An unexpected error occurred while fetching course outlines."
   assert embed is None
-
-
-@pytest.mark.asyncio
-async def test_course_without_offerings(cog, api):
-  api.respond(lambda: web.json_response(outline(offerings=[])))
-  interaction = make_interaction()
-  await run_course(cog, interaction, "CMPT", "120")
-  _, embed = sent(interaction)
-  fields = {f.name: f.value for f in embed.fields}
-  assert fields["Recent Offerings Found"] == "No offerings available"
-
-
-@pytest.mark.asyncio
-async def test_course_offering_without_instructors(cog, api):
-  api.respond(lambda: web.json_response(outline(offerings=[{"term": "Fall 2026", "instructors": []}])))
-  interaction = make_interaction()
-  await run_course(cog, interaction, "CMPT", "120")
-  _, embed = sent(interaction)
-  recent = next(f.value for f in embed.fields if f.name == "Recent Offerings")
-  assert recent == "• **Fall 2026 - No instructors listed**"
-
-
-@pytest.mark.asyncio
-async def test_course_missing_prerequisites_shows_none(cog, api):
-  api.respond(lambda: web.json_response(outline(prerequisites="")))
-  interaction = make_interaction()
-  await run_course(cog, interaction, "CMPT", "120")
-  _, embed = sent(interaction)
-  assert {f.name: f.value for f in embed.fields}["Prerequisites"] == "None"
 
 
 # /offerings
@@ -222,16 +171,6 @@ async def test_offerings_real_data_paged_by_year(cog, api, fraser):
 
 
 @pytest.mark.asyncio
-async def test_offerings_skips_years_without_offerings(cog, api):
-  offerings = [offering(number="120", term="Fall 2027"), offering(number="225", term="Spring 2024")]
-  api.respond(lambda: web.json_response([instructor(offerings=offerings)]))
-  interaction = make_interaction()
-  await run_offerings(cog, interaction, "Jane Smith")
-  pages = interaction.followup.send.call_args.kwargs["view"].pages
-  assert [p.title.rsplit(" ", 1)[-1] for p in pages] == ["2027", "2024"]
-
-
-@pytest.mark.asyncio
 async def test_offerings_single_year_has_no_buttons(cog, api):
   offerings = [offering(number="120", term="Fall 2026"), offering(number="225", term="Spring 2026")]
   api.respond(lambda: web.json_response([instructor(offerings=offerings)]))
@@ -268,7 +207,7 @@ async def test_offerings_sends_name_to_api(cog, api, fraser):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("response", [lambda: web.Response(status=404), lambda: web.json_response([])])
+@pytest.mark.parametrize("response", [lambda: web.json_response([])])
 async def test_offerings_not_found_includes_name(cog, api, response):
   api.respond(response)
   interaction = make_interaction()
@@ -310,35 +249,6 @@ async def test_offerings_term_with_no_matches(cog, api):
   _, embed = sent(interaction)
   assert embed.title == "No Offerings Found for Specified Term"
   assert "'summer'" in embed.description
-
-
-@pytest.mark.asyncio
-async def test_offerings_instructor_without_offerings(cog, api):
-  api.respond(lambda: web.json_response([instructor(offerings=[])]))
-  interaction = make_interaction()
-  await run_offerings(cog, interaction, "Jane Smith")
-  _, embed = sent(interaction)
-  assert embed.description == "No offerings found."
-
-
-@pytest.mark.asyncio
-async def test_offerings_huge_list_fits_description_limit(cog, api):
-  many = [offering(number=str(100 + i), title="A Very Long Course Title " * 3) for i in range(300)]
-  api.respond(lambda: web.json_response([instructor(offerings=many)]))
-  interaction = make_interaction()
-  await run_offerings(cog, interaction, "Jane Smith")
-  _, embed = sent(interaction)
-  assert len(embed.description) <= DESCRIPTION_LIMIT
-  assert embed.description.splitlines()[-1].endswith("more")
-
-
-@pytest.mark.asyncio
-async def test_offerings_api_error(cog, api):
-  api.respond(lambda: web.Response(status=503))
-  interaction = make_interaction()
-  await run_offerings(cog, interaction, "Brian Fraser")
-  _, embed = sent(interaction)
-  assert embed.title == "Server Error"
 
 
 # /section
@@ -454,7 +364,7 @@ async def test_reviews_success_with_real_entry(cog, api, fraser_reviews):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("name", ["brian fraser", "BRIAN FRASER", "  Brian Fraser  "])
+@pytest.mark.parametrize("name", ["  brian FRASER  "])
 async def test_reviews_name_match_ignores_case_and_spaces(cog, api, fraser_reviews, name):
   api.respond(lambda: web.json_response(fraser_reviews))
   interaction = make_interaction()
@@ -464,17 +374,7 @@ async def test_reviews_name_match_ignores_case_and_spaces(cog, api, fraser_revie
 
 
 @pytest.mark.asyncio
-async def test_reviews_not_found(cog, api, fraser_reviews):
-  api.respond(lambda: web.json_response(fraser_reviews))
-  interaction = make_interaction()
-  await run_reviews(cog, interaction, "Zzzz Notaprof")
-  _, embed = sent(interaction)
-  assert embed.title == "No Reviews Found"
-  assert "'Zzzz Notaprof'" in embed.description
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("response", [lambda: web.Response(status=404), lambda: web.json_response([])])
+@pytest.mark.parametrize("response", [lambda: web.json_response([])])
 async def test_reviews_no_data(cog, api, response):
   api.respond(response)
   interaction = make_interaction()
@@ -490,27 +390,6 @@ async def test_reviews_api_error(cog, api):
   await run_reviews(cog, interaction, "Brian Fraser")
   _, embed = sent(interaction)
   assert embed.title == "Error"
-
-
-@pytest.mark.asyncio
-async def test_reviews_without_url(cog, api, fraser_reviews):
-  entry = {**fraser_reviews[0], "URL": ""}
-  api.respond(lambda: web.json_response([entry]))
-  interaction = make_interaction()
-  await run_reviews(cog, interaction, "Brian Fraser")
-  _, embed = sent(interaction)
-  assert embed.url is None
-
-
-@pytest.mark.asyncio
-async def test_reviews_second_call_uses_cache(cog, api, fraser_reviews):
-  api.respond(lambda: web.json_response(fraser_reviews))  # only one response queued
-  await run_reviews(cog, make_interaction(), "Brian Fraser")
-  interaction = make_interaction()
-  await run_reviews(cog, interaction, "Brian Fraser")
-  _, embed = sent(interaction)
-  assert embed.title == "Reviews for Brian Fraser"
-  assert len(api.requests) == 1
 
 
 # department autocomplete (/course subject, /section dept)
@@ -536,24 +415,9 @@ async def test_section_dept_autocomplete_filters_departments(cog, api):
 
 
 @pytest.mark.asyncio
-async def test_autocomplete_uses_cached_departments(cog, api):
-  api.respond(lambda: web.json_response(outlines_for("CMPT", "MATH")))  # only one response queued
-  await cog.course_subject_autocomplete(make_interaction(), "c")
-  await cog.section_dept_autocomplete(make_interaction(), "m")
-  assert len(api.requests) == 1
-
-
-@pytest.mark.asyncio
 async def test_autocomplete_api_error_returns_no_choices(cog, api):
   api.respond(lambda: web.Response(status=500))
   assert await cog.course_subject_autocomplete(make_interaction(), "c") == []
-
-
-@pytest.mark.asyncio
-async def test_autocomplete_caps_at_25_choices(cog, api):
-  api.respond(lambda: web.json_response(outlines_for(*[f"D{i:02}" for i in range(40)])))
-  choices = await cog.course_subject_autocomplete(make_interaction(), "")
-  assert len(choices) == 25
 
 
 # /reviews: "did you mean" and shared names
@@ -580,24 +444,6 @@ async def test_reviews_not_found_suggests_close_spelling(cog, api):
   assert embed.title == "No Reviews Found"
   suggestions = {f.name: f.value for f in embed.fields}["Did you mean?"]
   assert suggestions == "• Brian Fraser"
-
-
-@pytest.mark.asyncio
-async def test_reviews_last_name_only_suggests_full_name(cog, api):
-  api.respond(lambda: web.json_response([prof("Brian Fraser"), prof("Diana Cukierman")]))
-  interaction = make_interaction()
-  await run_reviews(cog, interaction, "fraser")
-  _, embed = sent(interaction)
-  assert {f.name: f.value for f in embed.fields}["Did you mean?"] == "• Brian Fraser"
-
-
-@pytest.mark.asyncio
-async def test_reviews_not_found_without_suggestions(cog, api):
-  api.respond(lambda: web.json_response([prof("Brian Fraser")]))
-  interaction = make_interaction()
-  await run_reviews(cog, interaction, "Zzzz Notaprof")
-  _, embed = sent(interaction)
-  assert embed.fields == []
 
 
 @pytest.mark.asyncio

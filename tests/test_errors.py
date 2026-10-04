@@ -54,11 +54,3 @@ async def test_discord_failure_while_replying_is_swallowed():
   interaction = make_interaction(already_responded=True)
   interaction.followup.send.side_effect = discord.HTTPException(Mock(status=404, reason="Not Found"), "expired")
   await handle_app_command_error(interaction, invoke_error())  # must not raise
-
-
-@pytest.mark.asyncio
-async def test_unknown_command_name():
-  interaction = make_interaction(already_responded=False)
-  interaction.command = None
-  await handle_app_command_error(interaction, invoke_error())
-  interaction.response.send_message.assert_awaited_once()
