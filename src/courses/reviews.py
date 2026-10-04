@@ -1,3 +1,4 @@
+# course-reviews helper
 from datetime import date
 
 import discord
@@ -11,6 +12,7 @@ MIN_RETAKE_ANSWERS = 5  # most reviews leave "Would Take Again" blank; 2 answers
 RMP_PROFESSOR_URL = "https://www.ratemyprofessors.com/professor/{}"
 
 
+# Finds the current and next terms from today's date and whos teaching them
 def current_and_next_term(today: date) -> list[str]:
   """SFU terms: Spring = Jan–Apr, Summer = May–Aug, Fall = Sep–Dec."""
   if today.month <= 4:
@@ -46,6 +48,7 @@ def would_take_again_percent(reviews: list[dict]) -> int | None:
   return round(100 * yes / (yes + no))
 
 
+# ranks instructors based on their reviews
 def rank_instructors(instructors: list[dict]) -> tuple[list[dict], list[dict]]:
   """(ranked, few_reviews): best rating first, more reviews winning ties; instructors with
   fewer than MIN_REVIEWS_TO_RANK reviews are ranked separately so a couple of reviews can't top the list."""

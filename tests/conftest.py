@@ -25,7 +25,7 @@ def valid_env():
 
 @pytest.fixture
 def load_fixture():
-  """Load a real SFU API response saved in tests/fixtures/, e.g. load_fixture("sections_cmpt225")."""
+  """Load a real SFU API response saved in tests/fixtures/, e.g. load_fixture("outlines_cmpt120")."""
 
   def _load(name: str):
     return json.loads((FIXTURES / f"{name}.json").read_text())

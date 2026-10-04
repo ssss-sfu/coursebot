@@ -1,8 +1,10 @@
+# filters departments
 import difflib
 
 MAX_AUTOCOMPLETE_CHOICES = 25  # Discord's limit
 
 
+# command autocomplete
 def filter_departments(departments: list[str], current: str, limit: int = MAX_AUTOCOMPLETE_CHOICES) -> list[str]:
   """Departments matching what the user has typed so far: prefix matches first, then substring matches."""
   query = current.strip().upper()
@@ -13,6 +15,7 @@ def filter_departments(departments: list[str], current: str, limit: int = MAX_AU
   return (prefix + contains)[:limit]
 
 
+# handles typos and last names for instructor name misinputs
 def suggest_names(query: str, names: list[str], n: int = 3) -> list[str]:
   """Close spellings first (difflib), then names containing the query, e.g. a last name on its own."""
   query = query.strip().lower()

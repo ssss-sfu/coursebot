@@ -1,4 +1,5 @@
 import re
+from datetime import date
 
 import discord
 from discord import app_commands
@@ -6,10 +7,21 @@ from discord.ext import commands
 
 from src.courses import presentation
 from src.courses.pagination import send_pages
+from src.courses.prereqs import build_unlocks_embed, build_unlocks_index, course_key, find_outline
+from src.courses.requirements import REQUIREMENT_NAMES, build_find_embed, filter_courses
+from src.courses.reviews import build_course_reviews_embed, current_and_next_term
 from src.courses.search import filter_departments, suggest_names
 from src.sfu_api import SFUApiError, SFUClient
 
-TERMS = [app_commands.Choice(name=term.title(), value=term) for term in ("spring", "summer", "fall")]
+REQUIREMENT_CHOICES = [
+  app_commands.Choice(name=f"{name} ({code})", value=code) for code, name in REQUIREMENT_NAMES.items()
+]
+LEVEL_CHOICES = [app_commands.Choice(name=f"{level}-level", value=level) for level in (100, 200, 300, 400)]
+DELIVERY_CHOICES = [app_commands.Choice(name=d, value=d) for d in ("In Person", "Online", "Blended")]
+TERM_CHOICES = [
+  app_commands.Choice(name="This term", value="current"),
+  app_commands.Choice(name="Next term", value="next"),
+]
 
 
 class Courses(commands.Cog):
@@ -144,60 +156,129 @@ class Courses(commands.Cog):
 
     await send_pages(interaction, presentation.build_offerings_pages(name, offerings))
 
-  # Section Command
-  # Returns section info for a specific course in a specific year and term
-  @app_commands.command(name='section', description="Get course sections for a specific year and term")
-  @app_commands.describe(year="Year, e.g. 2026", term="Term", dept="Department code, e.g. CMPT", number="Course number")
-  @app_commands.choices(term=TERMS)
-  async def section(
-    self,
-    interaction: discord.Interaction,
-    year: app_commands.Range[int, 2000, 2100],
-    term: app_commands.Choice[str],
-    dept: str,
-    number: str,
-  ):
+  # Course Reviews Command
+  # Top-rated instructors for a course, putting whoever teaches it this term or next first
+  @app_commands.command(name='course-reviews', description="Instructor ratings for a course")
+  @app_commands.describe(dept="Department code, e.g. CMPT", number="Course number, e.g. 225")
+  async def course_reviews(self, interaction: discord.Interaction, dept: str, number: str):
     await interaction.response.defer()
-    term = term.value
+    dept, number = dept.strip(), number.strip()
     try:
-      data = await self.sfu.get_json(
-        "/v1/rest/sections", params={"term": f"{year}-{term}", "dept": dept, "number": number}
-      )
+      reviews = await self.sfu.get_course_reviews(dept, number)
     except SFUApiError as err:
-      print(f"/section failed: {err}")
-      embed = discord.Embed(
-        title="Server Error", description="Internal Server Error from not this bot lol", color=discord.Color.red()
-      )
-      await interaction.followup.send(embed=embed)
+      print(f"/course-reviews failed: {err}")
+      await interaction.followup.send("Couldn't reach the SFU Courses API. Try again later.")
       return
 
-    if not data:
-      embed = discord.Embed(
-        title="No Sections Found",
-        description=f"No sections found for {dept} {number} in {year}-{term}",
-        color=discord.Color.red(),
-      )
-      await interaction.followup.send(embed=embed)
+    if not reviews or not reviews.get("instructors"):
+      await interaction.followup.send(f"No reviews found for {dept.upper()} {number.upper()}.")
       return
 
-    course = data[0]
-    embed = discord.Embed(
-      title=f"{course['dept']} {course['number']}: {course['title']} ({year}-{term})",
-      description=f"Units: {course['units']}",
-      color=discord.Color.green(),
-    )
-    sections = course.get('sections', [])
-    if sections:
-      lines = [presentation.format_section_line(s) for s in sections]
-      embed.add_field(
-        name="Sections:", value=presentation.fit_lines(lines, presentation.FIELD_VALUE_LIMIT), inline=False
-      )
-    else:
-      embed.add_field(name="Sections:", value="No sections available", inline=False)
+    outline = None  # only used for the title and "(teaching …)"; the command still works without it
+    try:
+      outlines = await self.sfu.get_json("/v1/rest/outlines", params={"dept": dept, "number": number})
+      outline = outlines[0] if outlines else None
+    except SFUApiError as err:
+      print(f"/course-reviews outline lookup failed: {err}")
+
+    embed = build_course_reviews_embed(dept, number, reviews, outline, date.today())
     await interaction.followup.send(embed=embed)
 
-  @section.autocomplete("dept")
-  async def section_dept_autocomplete(self, interaction: discord.Interaction, current: str):
+  @course_reviews.autocomplete("dept")
+  async def course_reviews_dept_autocomplete(self, interaction: discord.Interaction, current: str):
+    return await self.department_choices(current)
+
+  # Unlocks Command
+  # Courses whose prerequisites mention the given course
+  @app_commands.command(name='unlocks', description="Courses that list a course as a prerequisite")
+  @app_commands.describe(dept="Department code, e.g. CMPT", number="Course number, e.g. 225")
+  async def unlocks(self, interaction: discord.Interaction, dept: str, number: str):
+    await interaction.response.defer()
+    try:
+      outlines = await self.sfu.get_all_outlines()
+    except SFUApiError as err:
+      print(f"/unlocks failed: {err}")
+      await interaction.followup.send("Couldn't reach the SFU Courses API. Try again later.")
+      return
+
+    course = find_outline(outlines, dept, number)
+    if course is None:
+      await interaction.followup.send(f"Couldn't find {dept.strip().upper()} {number.strip().upper()}.")
+      return
+
+    unlocked = build_unlocks_index(outlines).get(course_key(dept, number), [])
+    await interaction.followup.send(embed=build_unlocks_embed(course, unlocked))
+
+  @unlocks.autocomplete("dept")
+  async def unlocks_dept_autocomplete(self, interaction: discord.Interaction, current: str):
+    return await self.department_choices(current)
+
+  # Find Command
+  # Undergraduate courses filtered by requirement, department, level, delivery, prerequisites and term
+  @app_commands.command(name='find', description="Find undergraduate courses by requirement, level and more")
+  @app_commands.describe(
+    requirement="WQB requirement",
+    dept="Department code, e.g. CMPT",
+    level="Course level",
+    delivery="In person, online or blended",
+    no_prereqs="Only courses with no prerequisites",
+    term="Only courses offered this term or next term",
+  )
+  @app_commands.choices(
+    requirement=REQUIREMENT_CHOICES, level=LEVEL_CHOICES, delivery=DELIVERY_CHOICES, term=TERM_CHOICES
+  )
+  async def find(
+    self,
+    interaction: discord.Interaction,
+    requirement: app_commands.Choice[str] | None = None,
+    dept: str | None = None,
+    level: app_commands.Choice[int] | None = None,
+    delivery: app_commands.Choice[str] | None = None,
+    no_prereqs: bool = False,
+    term: app_commands.Choice[str] | None = None,
+  ):
+    await interaction.response.defer(ephemeral=True)  # results can be long; only the person who asked sees them
+    if not any([requirement, dept, level, delivery, no_prereqs, term]):
+      await interaction.followup.send("Pick at least one filter, e.g. `/find requirement:Writing (W) level:300-level`.")
+      return
+
+    try:
+      outlines = await self.sfu.get_all_outlines()
+    except SFUApiError as err:
+      print(f"/find failed: {err}")
+      await interaction.followup.send("Couldn't reach the SFU Courses API. Try again later.")
+      return
+
+    term_name = None
+    if term:
+      this_term, next_term = current_and_next_term(date.today())
+      term_name = this_term if term.value == "current" else next_term
+
+    matches = filter_courses(
+      outlines,
+      requirement=requirement.value if requirement else None,
+      dept=dept,
+      level=level.value if level else None,
+      delivery=delivery.value if delivery else None,
+      no_prereqs=no_prereqs,
+      term=term_name,
+    )
+    labels = [
+      label
+      for label in (
+        requirement.value if requirement else None,
+        dept.strip().upper() if dept else None,
+        level.name if level else None,
+        delivery.value if delivery else None,
+        "no prerequisites" if no_prereqs else None,
+        term_name,
+      )
+      if label
+    ]
+    await interaction.followup.send(embed=build_find_embed(matches, labels))
+
+  @find.autocomplete("dept")
+  async def find_dept_autocomplete(self, interaction: discord.Interaction, current: str):
     return await self.department_choices(current)
 
   # Reviews Command

@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -6,7 +7,7 @@ from discord import app_commands
 
 from src.cogs.courses import Courses
 from src.courses.pagination import EmbedPaginator
-from src.courses.presentation import FIELD_VALUE_LIMIT, parse_term_year
+from src.courses.presentation import parse_term_year
 from src.sfu_api import SFUClient
 
 
@@ -251,87 +252,6 @@ async def test_offerings_term_with_no_matches(cog, api):
   assert "'summer'" in embed.description
 
 
-# /section
-
-
-async def run_section(cog, interaction, year=2026, term="fall", dept="CMPT", number="225"):
-  # slash-command choices arrive as Choice objects, not plain strings
-  await cog.section.callback(cog, interaction, year, app_commands.Choice(name=term.title(), value=term), dept, number)
-
-
-@pytest.fixture
-def cmpt225(load_fixture):
-  return load_fixture("sections_cmpt225")
-
-
-@pytest.mark.asyncio
-async def test_section_success_with_real_data(cog, api, cmpt225):
-  api.respond(lambda: web.json_response(cmpt225))
-  interaction = make_interaction()
-  await run_section(cog, interaction)
-
-  assert interaction.calls == ["defer", "send"]
-  _, embed = sent(interaction)
-  course = cmpt225[0]
-  assert embed.title == f"{course['dept']} {course['number']}: {course['title']} (2026-fall)"
-  assert embed.description == f"Units: {course['units']}"
-  field = embed.fields[0].value
-  assert len(field) <= FIELD_VALUE_LIMIT
-  assert field.startswith(f"**Section {course['sections'][0]['section']}**")
-  assert "{" not in field  # no raw instructor/schedule dicts
-
-
-@pytest.mark.asyncio
-async def test_section_real_cmpt225_is_truncated(cog, api, cmpt225):
-  # the full 14-section list is 1,075 characters, over Discord's 1,024 field limit
-  api.respond(lambda: web.json_response(cmpt225))
-  interaction = make_interaction()
-  await run_section(cog, interaction)
-  _, embed = sent(interaction)
-  assert embed.fields[0].value.splitlines()[-1].startswith("…and ")
-
-
-@pytest.mark.asyncio
-async def test_section_sends_params_to_api(cog, api, cmpt225):
-  api.respond(lambda: web.json_response(cmpt225))
-  await run_section(cog, make_interaction(), 2026, "fall", "CMPT", "225")
-  query = api.requests[0].query
-  assert api.requests[0].path == "/v1/rest/sections"
-  assert (query["term"], query["dept"], query["number"]) == ("2026-fall", "CMPT", "225")
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("response", [lambda: web.Response(status=404), lambda: web.json_response([])])
-async def test_section_not_found(cog, api, response):
-  api.respond(response)
-  interaction = make_interaction()
-  await run_section(cog, interaction, 2026, "autumn", "CMPT", "225")
-  _, embed = sent(interaction)
-  assert embed.title == "No Sections Found"
-  assert embed.description == "No sections found for CMPT 225 in 2026-autumn"
-
-
-@pytest.mark.asyncio
-async def test_section_course_without_sections(cog, api):
-  api.respond(
-    lambda: web.json_response([{"dept": "CMPT", "number": "225", "title": "DS", "units": "3", "sections": []}])
-  )
-  interaction = make_interaction()
-  await run_section(cog, interaction)
-  _, embed = sent(interaction)
-  assert embed.fields[0].value == "No sections available"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(("status", "title"), [(400, "Server Error"), (500, "Server Error"), (503, "Server Error")])
-async def test_section_api_errors(cog, api, status, title):
-  api.respond(lambda: web.Response(status=status))
-  interaction = make_interaction()
-  await run_section(cog, interaction)
-  _, embed = sent(interaction)
-  assert embed.title == title
-
-
 # /reviews
 
 
@@ -392,7 +312,7 @@ async def test_reviews_api_error(cog, api):
   assert embed.title == "Error"
 
 
-# department autocomplete (/course subject, /section dept)
+# department autocomplete
 
 
 def outlines_for(*depts):
@@ -405,13 +325,6 @@ async def test_course_subject_autocomplete_filters_departments(cog, api):
   choices = await cog.course_subject_autocomplete(make_interaction(), "c")
   assert [c.value for c in choices] == ["CHEM", "CMPT", "MACM"]  # prefix matches, then substring
   assert api.requests[0].path == "/v1/rest/outlines"
-
-
-@pytest.mark.asyncio
-async def test_section_dept_autocomplete_filters_departments(cog, api):
-  api.respond(lambda: web.json_response(outlines_for("CMPT", "MATH")))
-  choices = await cog.section_dept_autocomplete(make_interaction(), "ma")
-  assert [c.value for c in choices] == ["MATH"]
 
 
 @pytest.mark.asyncio
@@ -460,3 +373,159 @@ async def test_reviews_shared_name_shows_every_professor(cog, api):
   assert [f.name for f in embed.fields] == ["Humanities", "Religious Studies"]
   assert "[RateMyProfessors]" not in embed.fields[0].value  # no URL for the first one
   assert "[RateMyProfessors](https://example.com/1)" in embed.fields[1].value
+
+
+# /course-reviews
+
+
+class Oct2026(date):
+  @classmethod
+  def today(cls):
+    return cls(2026, 10, 4)
+
+
+@pytest.fixture
+def fixed_today(monkeypatch):
+  monkeypatch.setattr("src.cogs.courses.date", Oct2026)
+
+
+async def run_course_reviews(cog, interaction, dept="CMPT", number="225"):
+  await cog.course_reviews.callback(cog, interaction, dept, number)
+
+
+@pytest.mark.asyncio
+async def test_course_reviews_real_data(cog, api, load_fixture, fixed_today):
+  api.respond(lambda: web.json_response(load_fixture("course_reviews_cmpt225")))
+  api.respond(lambda: web.json_response(load_fixture("outlines_cmpt225")))
+  interaction = make_interaction()
+  await run_course_reviews(cog, interaction, "cmpt ", " 225")
+
+  assert interaction.calls == ["defer", "send"]
+  assert [r.path for r in api.requests] == ["/v1/rest/reviews/courses/CMPT225", "/v1/rest/outlines"]
+  _, embed = sent(interaction)
+  assert embed.title.startswith("CMPT 225: Data Structures and Programming")
+  lines = embed.description.splitlines()
+  assert lines[0].startswith("[Igor Shinkar](") and lines[0].endswith("(teaching Fall 2026)")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+  "response",
+  [lambda: web.Response(status=404), lambda: web.json_response({"course_code": "CMPT999", "instructors": []})],
+)
+async def test_course_reviews_none_found(cog, api, response):
+  api.respond(response)
+  interaction = make_interaction()
+  await run_course_reviews(cog, interaction, "cmpt", "999")
+  text, embed = sent(interaction)
+  assert text == "No reviews found for CMPT 999."
+  assert embed is None
+  assert len(api.requests) == 1  # no outline lookup when there's nothing to show
+
+
+@pytest.mark.asyncio
+async def test_course_reviews_api_error(cog, api):
+  api.respond(lambda: web.Response(status=500))
+  interaction = make_interaction()
+  await run_course_reviews(cog, interaction)
+  text, _ = sent(interaction)
+  assert text == "Couldn't reach the SFU Courses API. Try again later."
+
+
+@pytest.mark.asyncio
+async def test_course_reviews_still_works_when_outline_fails(cog, api, load_fixture, fixed_today):
+  api.respond(lambda: web.json_response(load_fixture("course_reviews_cmpt225")))
+  api.respond(lambda: web.Response(status=500))
+  interaction = make_interaction()
+  await run_course_reviews(cog, interaction)
+  _, embed = sent(interaction)
+  assert embed.title.startswith("CMPT 225 — ")  # no course title without the outline
+  assert "teaching" not in embed.description
+
+
+# /unlocks
+
+
+async def run_unlocks(cog, interaction, dept="CMPT", number="225"):
+  await cog.unlocks.callback(cog, interaction, dept, number)
+
+
+@pytest.mark.asyncio
+async def test_unlocks_real_outlines(cog, api, load_fixture):
+  api.respond(lambda: web.json_response(load_fixture("outlines_prereq_samples")))
+  interaction = make_interaction()
+  await run_unlocks(cog, interaction, "cmpt", "225")
+  assert interaction.calls == ["defer", "send"]
+  _, embed = sent(interaction)
+  assert embed.title == "What CMPT 225 unlocks"
+  assert "CMPT 300 · Operating Systems I" in embed.description.splitlines()
+
+
+@pytest.mark.asyncio
+async def test_unlocks_unknown_course(cog, api, load_fixture):
+  api.respond(lambda: web.json_response(load_fixture("outlines_prereq_samples")))
+  interaction = make_interaction()
+  await run_unlocks(cog, interaction, "CMPT", "999")
+  text, embed = sent(interaction)
+  assert text == "Couldn't find CMPT 999."
+  assert embed is None
+
+
+@pytest.mark.asyncio
+async def test_unlocks_api_error(cog, api):
+  api.respond(lambda: web.Response(status=500))
+  interaction = make_interaction()
+  await run_unlocks(cog, interaction)
+  text, _ = sent(interaction)
+  assert text == "Couldn't reach the SFU Courses API. Try again later."
+
+
+# /find
+
+
+def choice(value, name=None):
+  return app_commands.Choice(name=name or str(value), value=value)
+
+
+async def run_find(cog, interaction, **filters):
+  args = {"requirement": None, "dept": None, "level": None, "delivery": None, "no_prereqs": False, "term": None}
+  await cog.find.callback(cog, interaction, **{**args, **filters})
+
+
+@pytest.mark.asyncio
+async def test_find_with_filters(cog, api, load_fixture):
+  api.respond(lambda: web.json_response(load_fixture("outlines_find_samples")))
+  interaction = make_interaction()
+  await run_find(cog, interaction, requirement=choice("W"), level=choice(100, "100-level"))
+  assert interaction.calls == ["defer", "send"]
+  interaction.response.defer.assert_awaited_once_with(ephemeral=True)  # replies are private to avoid chat spam
+  _, embed = sent(interaction)
+  assert embed.title == "Courses: W · 100-level"
+  assert embed.description.startswith("**ENSC 100W** ")
+
+
+@pytest.mark.asyncio
+async def test_find_term_resolves_to_next_term(cog, api, load_fixture, fixed_today):
+  api.respond(lambda: web.json_response(load_fixture("outlines_find_samples")))
+  interaction = make_interaction()
+  await run_find(cog, interaction, dept="ENSC", term=choice("next"))
+  _, embed = sent(interaction)
+  assert embed.title == "Courses: ENSC · Spring 2027"
+
+
+@pytest.mark.asyncio
+async def test_find_without_filters_asks_for_one(cog, api):
+  interaction = make_interaction()
+  await run_find(cog, interaction)
+  text, _ = sent(interaction)
+  assert text.startswith("Pick at least one filter")
+  assert api.requests == []
+
+
+@pytest.mark.asyncio
+async def test_find_api_error(cog, api):
+  api.respond(lambda: web.Response(status=500))
+  interaction = make_interaction()
+  await run_find(cog, interaction, no_prereqs=True)
+  text, _ = sent(interaction)
+  assert text == "Couldn't reach the SFU Courses API. Try again later."

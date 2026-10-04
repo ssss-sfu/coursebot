@@ -151,3 +151,12 @@ async def test_course_reviews_not_found_not_cached(api, session):
   client = SFUClient(session, api.base_url)
   assert await client.get_course_reviews("CMPT", "225") is None
   assert (await client.get_course_reviews("CMPT", "225"))["course_code"] == "CMPT225"
+
+
+@pytest.mark.asyncio
+async def test_outlines_fetched_once_for_departments_and_outlines(api, session):
+  api.respond(lambda: web.json_response([{"dept": "MATH", "number": "151"}, {"dept": "CMPT", "number": "120"}]))
+  client = SFUClient(session, api.base_url)
+  assert await client.get_departments() == ["CMPT", "MATH"]
+  assert len(await client.get_all_outlines()) == 2
+  assert len(api.requests) == 1

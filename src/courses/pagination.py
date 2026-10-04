@@ -1,6 +1,8 @@
+# adds pages to the discord message
 import discord
 
 
+# class handles the buttons
 class EmbedPaginator(discord.ui.View):
   """◀ ▶ buttons that flip through a list of embeds; only the user who ran the command can use them."""
 
@@ -45,6 +47,7 @@ class EmbedPaginator(discord.ui.View):
         pass  # message deleted or interaction token expired; nothing to update
 
 
+#
 async def send_pages(interaction: discord.Interaction, pages: list[discord.Embed]):
   """Send one embed, or the first of several with paging buttons (after the interaction was deferred)."""
   if len(pages) == 1:

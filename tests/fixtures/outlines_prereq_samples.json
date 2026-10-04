@@ -1,0 +1,114 @@
+[
+ {
+  "dept": "ARCH",
+  "number": "272W",
+  "title": "Archaeology of the Old World",
+  "prerequisites": "ARCH 100, 101, or 201.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "CA",
+  "number": "123",
+  "title": "Dance Training and Movement Systems II",
+  "prerequisites": "CA (or FPA) 122. Corequisite: CA 123 and CA 124 must be taken concurrently.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "EASC",
+  "number": "305",
+  "title": "Quantitative Methods for the Earth Sciences",
+  "prerequisites": "EASC 101; MATH 152, PHYS 121 or 126 or 102 or 141, and STAT 201 or 270 (all with a grade of C- or better), and six units in any 200-division or higher EASC courses.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "ACMA",
+  "number": "231",
+  "title": "Tools for Data-Driven Decision Making",
+  "prerequisites": "BC Mathematics 12 (or equivalent) or any 100-level MATH course with a minimum grade of C.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "ENSC",
+  "number": "403",
+  "title": "Directed Studies in Engineering Science",
+  "prerequisites": "A minimum of 100 units and permission of the chair of the undergraduate curriculum committee.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "BPK",
+  "number": "343",
+  "title": "Active Health: Assessment and Programming",
+  "prerequisites": "BPK 142, 143 and 205; STAT 201 or an equivalent statistics course, BPK 340 (may be taken concurrently). Students must successfully complete a Criminal Record Check prior to enrolling.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "ARCH",
+  "number": "312",
+  "title": "Greek Art and Archaeology",
+  "prerequisites": "One of the following courses: ARCH 100, ARCH 101, ARCH 201, HS 100, HS 231, HS 232, HS 277, HIST 277 or by permission of the instructor.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "ARCH",
+  "number": "321",
+  "title": "Special Topics: Select Regions in World Archaeology I",
+  "prerequisites": "ARCH 272W or 273 or by permission of instructor. Other prerequisites may be required, but will vary according to topic.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "CMPT",
+  "number": "225",
+  "title": "Data Structures and Programming",
+  "prerequisites": "(MACM 101 and (CMPT 125, CMPT 129 or CMPT 135)) or (ENSC 251 and ENSC 252), all with a minimum grade of C-.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "CMPT",
+  "number": "300",
+  "title": "Operating Systems I",
+  "prerequisites": "CMPT 225 and (CMPT 295 or ENSC 254), all with a minimum grade of C-.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "CMPT",
+  "number": "307",
+  "title": "Data Structures and Algorithms",
+  "prerequisites": "CMPT 225, (MACM 201 or CMPT 210), (MATH 150 or MATH 151), and (MATH 232 or MATH 240), all with a minimum grade of C-. MATH 154 or MATH 157 with a grade of at least B+ may be substituted for MATH 150 or MATH 151.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "CMPT",
+  "number": "276",
+  "title": "Introduction to Software Engineering",
+  "prerequisites": "One W course, CMPT 225, (MACM 101 or (ENSC 251 and ENSC 252)) and (MATH 151 or MATH 150), all with a minimum grade of C-. MATH 154 or MATH 157 with at least a B+ may be substituted for MATH 151 or MATH 150.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "MACM",
+  "number": "201",
+  "title": "Discrete Mathematics II",
+  "prerequisites": "MACM 101 or (ENSC 251 and one of MATH 232 or MATH 240).",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "CMPT",
+  "number": "120",
+  "title": "Introduction to Computing Science and Programming I",
+  "prerequisites": "BC Math 12 or equivalent is recommended.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "CMPT",
+  "number": "125",
+  "title": "Introduction to Computing Science and Programming II",
+  "prerequisites": "CMPT 120 or CMPT 130, with a minimum grade of C-.",
+  "degreeLevel": "UGRD"
+ },
+ {
+  "dept": "CMPT",
+  "number": "135",
+  "title": "Introduction to Computer Programming II",
+  "prerequisites": "CMPT 130 with a minimum grade of C-.",
+  "degreeLevel": "UGRD"
+ }
+]

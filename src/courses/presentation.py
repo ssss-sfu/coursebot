@@ -1,30 +1,20 @@
+# purpose of this file is shared formatting.
 import re
 
 import discord
 
+# discord embeds have size limits:
 FIELD_VALUE_LIMIT = 1024
 DESCRIPTION_LIMIT = 4096
 
 
+# sorts years
 def parse_term_year(term_code: str) -> int:
   match = re.search(r'(\d{4})', term_code)
   return int(match.group(1)) if match else 0
 
 
-def format_section_line(section: dict) -> str:
-  # the API repeats instructors (once without email, once with); dict.fromkeys dedupes and keeps order
-  names = dict.fromkeys(i.get("name") for i in section.get("instructors", []) if i.get("name"))
-  # strip(" -") so a schedule with no days/times becomes "" and falls back to TBA instead of showing "-"
-  times = [
-    f"{s.get('days', '')} {s.get('startTime', '')}-{s.get('endTime', '')}".strip(" -")
-    for s in section.get("schedules", [])
-  ]
-  schedule = "; ".join(t for t in times if t) or "TBA"
-  return (
-    f"**Section {section.get('section', 'N/A')}** - Instructors: {', '.join(names) or 'TBA'} - Schedule: {schedule}"
-  )
-
-
+# Keeps as many whole lines as can fit, then adds a generic message
 def fit_lines(lines: list[str], limit: int) -> str:
   """Join whole lines up to `limit` characters, ending with "…and N more" when some don't fit."""
   text = "\n".join(lines)
@@ -42,12 +32,14 @@ def fit_lines(lines: list[str], limit: int) -> str:
 SEASON_ORDER = {"spring": 1, "summer": 2, "fall": 3}
 
 
+# sorts terms/ seasons
 def term_sort_key(term: str) -> tuple[int, int]:
   """(year, season) so terms sort chronologically; unknown parts sort as 0."""
   season = next((rank for name, rank in SEASON_ORDER.items() if name in term.lower()), 0)
   return parse_term_year(term), season
 
 
+# Year paging
 def group_offerings_by_year(offerings: list[dict]) -> list[tuple[int, list[dict]]]:
   """[(year, offerings)] newest year first, newest term first within a year; only years that have offerings.
   Offerings whose term has no year are grouped under 0, which sorts last."""

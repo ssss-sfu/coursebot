@@ -1,0 +1,592 @@
+[
+ {
+  "dept": "SEE",
+  "number": "222",
+  "title": "Engineering Materials for Energy Systems",
+  "designation": "",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "PHYS 140, CHEM 121 or (CHEM 122 and CHEM 126).",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "COGS",
+  "number": "100",
+  "title": "Exploring the Mind",
+  "designation": "Breadth-Hum/Social Sci/Science",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "Open to all students.",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ARCH",
+  "number": "286",
+  "title": "Cultural Heritage Management",
+  "designation": "Breadth-Humanities",
+  "deliveryMethod": "Blended",
+  "degreeLevel": "UGRD",
+  "prerequisites": "30 units including one of ARCH 100, ARCH 101, ARCH 201, EVSC 100, GEOG 100, or REM 100.",
+  "offerings": [
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Summer 2024"
+   }
+  ]
+ },
+ {
+  "dept": "MSE",
+  "number": "102",
+  "title": "Applied Science, Technology and Society",
+  "designation": "Breadth-Humanities/Sciences",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ARCH",
+  "number": "226",
+  "title": "Shamans, Sacrifice and Psychedelics",
+  "designation": "Breadth-Humanities/Social Sciences",
+  "deliveryMethod": "Online",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "BISC",
+  "number": "100",
+  "title": "Introduction to Biology",
+  "designation": "Breadth-Science",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "Students with a minimum grade of C in Biology 12 (or equivalent) who are considering a BISC major, are encouraged to proceed directly to BISC 101 and 102.",
+  "offerings": [
+   {
+    "term": "Summer 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ARCH",
+  "number": "131",
+  "title": "Human Origins",
+  "designation": "Breadth-Social Sci/Science",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ARCH",
+  "number": "100",
+  "title": "Ancient Peoples and Places",
+  "designation": "Breadth-Social Sciences",
+  "deliveryMethod": "Online",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ACMA",
+  "number": "231",
+  "title": "Tools for Data-Driven Decision Making",
+  "designation": "N/A",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "BC Mathematics 12 (or equivalent) or any 100-level MATH course with a minimum grade of C.",
+  "offerings": [
+   {
+    "term": "Fall 2024"
+   }
+  ]
+ },
+ {
+  "dept": "PHIL",
+  "number": "105",
+  "title": "Critical Thinking",
+  "designation": "Q/Breadth-Social Sci/Sciences",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ACMA",
+  "number": "201",
+  "title": "Interest Theory and Applications",
+  "designation": "Quantitative",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "MATH 152 with a minimum grade of C; or MATH 155 or MATH 158, with a grade of at least B.",
+  "offerings": [
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ACMA",
+  "number": "101",
+  "title": "Introduction to Insurance",
+  "designation": "Quantitative/Breadth-Science",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ECON",
+  "number": "103",
+  "title": "Principles of Microeconomics",
+  "designation": "Quantitative/Breadth-Soc",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ARCH",
+  "number": "471W",
+  "title": "Archaeological Theory",
+  "designation": "Writing",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "ARCH 101, 131, 201, 272W and 273.",
+  "offerings": [
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ENSC",
+  "number": "100W",
+  "title": "Engineering, Science and Society",
+  "designation": "Writing/Breadth-Hum/Science",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Fall 2024"
+   }
+  ]
+ },
+ {
+  "dept": "DIAL",
+  "number": "390W",
+  "title": "Semester: Dialogue",
+  "designation": "Writing/Breadth-Hum/Soc Sci",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "45 units. Students should apply prior to the term in which they wish to enroll. Students can be accepted into either the Summer Institute in Dialogue (DIAL 390W and 391W, 10 units) or the Semester in Dialogue (fall or spring term, DIAL 390W, 391W and 392W, 15 units), but not both.",
+  "offerings": [
+   {
+    "term": "Fall 2024"
+   }
+  ]
+ },
+ {
+  "dept": "CA",
+  "number": "257W",
+  "title": "Context I",
+  "designation": "Writing/Breadth-Humanities",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Fall 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ARCH",
+  "number": "272W",
+  "title": "Archaeology of the Old World",
+  "designation": "Writing/Breadth-Social Sci",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "ARCH 100, 101, or 201.",
+  "offerings": [
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Fall 2024"
+   }
+  ]
+ },
+ {
+  "dept": "ACMA",
+  "number": "360W",
+  "title": "Actuarial Communication",
+  "designation": "Writing/Quantitative",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "ACMA 301 (or 320), with a minimum grade of C.",
+  "offerings": [
+   {
+    "term": "Spring 2025"
+   }
+  ]
+ },
+ {
+  "dept": "ACMA",
+  "number": "830",
+  "title": "Stochastic Processes for Insurance and Finance",
+  "designation": "",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "GRAD",
+  "prerequisites": "",
+  "offerings": [
+   {
+    "term": "Fall 2024"
+   }
+  ]
+ },
+ {
+  "dept": "CMPT",
+  "number": "120",
+  "title": "Introduction to Computing Science and Programming I",
+  "designation": "Quantitative/Breadth-Science",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "BC Math 12 or equivalent is recommended.",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ },
+ {
+  "dept": "CMPT",
+  "number": "376W",
+  "title": "Professional Responsibility and Technical Writing",
+  "designation": "Writing",
+  "deliveryMethod": "In Person",
+  "degreeLevel": "UGRD",
+  "prerequisites": "CMPT 105W and (CMPT 275 or CMPT 276), with a minimum grade of C-.",
+  "offerings": [
+   {
+    "term": "Spring 2027"
+   },
+   {
+    "term": "Fall 2026"
+   },
+   {
+    "term": "Summer 2026"
+   },
+   {
+    "term": "Spring 2026"
+   },
+   {
+    "term": "Fall 2025"
+   },
+   {
+    "term": "Summer 2025"
+   },
+   {
+    "term": "Spring 2025"
+   },
+   {
+    "term": "Fall 2024"
+   },
+   {
+    "term": "Summer 2024"
+   },
+   {
+    "term": "Spring 2024"
+   }
+  ]
+ }
+]
