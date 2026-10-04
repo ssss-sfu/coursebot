@@ -1,51 +1,10 @@
 import asyncio
-from collections.abc import Callable
 
 import aiohttp
 import pytest
-import pytest_asyncio
 from aiohttp import test_utils, web
 
 from src.sfu_api import SFUApiError, SFUClient
-
-
-class FakeSFUApi:
-  """Local stand-in for api.sfucourses.com: queue responses, then inspect the requests it received."""
-
-  def __init__(self):
-    self.queued: list[Callable[[], web.StreamResponse]] = []
-    self.requests: list[web.Request] = []
-    self.base_url = ""
-
-  def respond(self, factory: Callable[[], web.StreamResponse]):
-    self.queued.append(factory)
-
-  async def handle(self, request: web.Request) -> web.StreamResponse:
-    self.requests.append(request)
-    if not self.queued:
-      return web.Response(status=599, text="unexpected request: nothing queued")
-    response = self.queued.pop(0)()
-    if asyncio.iscoroutine(response):
-      response = await response
-    return response
-
-
-@pytest_asyncio.fixture
-async def api():
-  fake = FakeSFUApi()
-  app = web.Application()
-  app.router.add_get("/{tail:.*}", fake.handle)
-  server = test_utils.TestServer(app)
-  await server.start_server()
-  fake.base_url = str(server.make_url("/")).rstrip("/")
-  yield fake
-  await server.close()
-
-
-@pytest_asyncio.fixture
-async def session():
-  async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as s:
-    yield s
 
 
 # get_json
