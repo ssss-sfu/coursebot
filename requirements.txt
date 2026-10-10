@@ -1,4 +1,4 @@
 #specifies which version of each package to install.
 discord.py==2.7.1
-aiohttp==3.14.3
+aiohttp==3.14.4
 python-dotenv==1.2.3
