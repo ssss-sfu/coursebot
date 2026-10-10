@@ -1,8 +1,11 @@
+from datetime import date
+
 import pytest
 
 from src.courses.presentation import (
   FIELD_VALUE_LIMIT,
   build_offerings_pages,
+  current_and_next_term,
   fit_lines,
   group_offerings_by_year,
   parse_term_year,
@@ -56,6 +59,18 @@ def offering(term, number="120"):
 )
 def test_term_sort_key(term, key):
   assert term_sort_key(term) == key
+
+
+@pytest.mark.parametrize(
+  ("today", "terms"),
+  [
+    (date(2026, 4, 30), ["Spring 2026", "Summer 2026"]),
+    (date(2026, 5, 1), ["Summer 2026", "Fall 2026"]),
+    (date(2026, 12, 31), ["Fall 2026", "Spring 2027"]),
+  ],
+)
+def test_current_and_next_term(today, terms):
+  assert current_and_next_term(today) == terms
 
 
 def test_groups_newest_year_first_and_skips_missing_years():

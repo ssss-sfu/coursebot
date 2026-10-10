@@ -1,5 +1,6 @@
 # purpose of this file is shared formatting.
 import re
+from datetime import date
 
 import discord
 
@@ -37,6 +38,15 @@ def term_sort_key(term: str) -> tuple[int, int]:
   """(year, season) so terms sort chronologically; unknown parts sort as 0."""
   season = next((rank for name, rank in SEASON_ORDER.items() if name in term.lower()), 0)
   return parse_term_year(term), season
+
+
+def current_and_next_term(today: date) -> list[str]:
+  """SFU terms: Spring = Jan–Apr, Summer = May–Aug, Fall = Sep–Dec."""
+  if today.month <= 4:
+    return [f"Spring {today.year}", f"Summer {today.year}"]
+  if today.month <= 8:
+    return [f"Summer {today.year}", f"Fall {today.year}"]
+  return [f"Fall {today.year}", f"Spring {today.year + 1}"]
 
 
 # Year paging

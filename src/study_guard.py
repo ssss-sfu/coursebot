@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -7,6 +8,8 @@ import discord
 from discord.ext import tasks
 
 from src.config import StudyTimeConfig
+
+log = logging.getLogger(__name__)
 
 is_study_guard_initialized = False
 
@@ -32,7 +35,7 @@ async def send_dm(member: discord.Member, message: str):
     await member.send(message)
   except discord.HTTPException:
     # Gracefully fail
-    print(f'Encountered error sending message to user "{member.name}"')
+    log.warning('Failed to DM "%s"', member.name)
 
 
 async def send_channel_message(client: discord.Client, channelId: int, message: str):
@@ -40,7 +43,7 @@ async def send_channel_message(client: discord.Client, channelId: int, message: 
   if channel and isinstance(channel, discord.TextChannel):
     await channel.send(f'[STUDY TIME]: {message}')
   else:
-    print(f'Failed to send message to channel {channelId}')
+    log.warning('Failed to send message to channel %s', channelId)
 
 
 def setup(bot: discord.Client, config: StudyTimeConfig):
@@ -114,8 +117,8 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
           if member.get_role(study_time_role.id) and member not in study_time_vc.members:
             removed_roles += 1
             await member.remove_roles(study_time_role)
-        except Exception as e:
-          print(e)
+        except Exception:
+          log.warning('Failed to remove the study time role from "%s"', member.name, exc_info=True)
 
       # Auto assign role to all members in the VC
       added_roles = 0
@@ -125,8 +128,8 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
           if not member.get_role(study_time_role.id):
             added_roles += 1
             await member.add_roles(study_time_role)
-        except Exception as e:
-          print(e)
+        except Exception:
+          log.warning('Failed to add the study time role to "%s"', member.name, exc_info=True)
 
       await send_channel_message(
         bot,

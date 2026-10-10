@@ -13,5 +13,5 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["python", "bot.py"]
+CMD ["python", "-m", "src.main"]
 ENV PYTHONUNBUFFERED=1

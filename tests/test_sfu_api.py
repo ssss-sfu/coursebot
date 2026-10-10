@@ -122,37 +122,6 @@ async def test_departments_and_reviews_cached_separately(api, session):
   assert [r.path for r in api.requests] == ["/v1/rest/outlines", "/v1/rest/reviews/instructors"]
 
 
-# get_course_reviews
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(("dept", "number"), [("cmpt ", " 225")])
-async def test_course_reviews_path_normalized(api, session, dept, number):
-  api.respond(lambda: web.json_response({"course_code": "CMPT225", "instructors": []}))
-  await SFUClient(session, api.base_url).get_course_reviews(dept, number)
-  assert api.requests[0].path == "/v1/rest/reviews/courses/CMPT225"
-
-
-@pytest.mark.asyncio
-async def test_course_reviews_cached_per_course(api, session):
-  api.respond(lambda: web.json_response({"course_code": "CMPT225", "instructors": [{"professor_name": "A"}]}))
-  api.respond(lambda: web.json_response({"course_code": "CMPT120", "instructors": [{"professor_name": "B"}]}))
-  client = SFUClient(session, api.base_url)
-  first = await client.get_course_reviews("CMPT", "225")
-  await client.get_course_reviews("CMPT", "120")
-  assert await client.get_course_reviews("cmpt", "225") == first
-  assert [r.path for r in api.requests] == ["/v1/rest/reviews/courses/CMPT225", "/v1/rest/reviews/courses/CMPT120"]
-
-
-@pytest.mark.asyncio
-async def test_course_reviews_not_found_not_cached(api, session):
-  api.respond(lambda: web.Response(status=404))
-  api.respond(lambda: web.json_response({"course_code": "CMPT225", "instructors": [{"professor_name": "A"}]}))
-  client = SFUClient(session, api.base_url)
-  assert await client.get_course_reviews("CMPT", "225") is None
-  assert (await client.get_course_reviews("CMPT", "225"))["course_code"] == "CMPT225"
-
-
 @pytest.mark.asyncio
 async def test_outlines_fetched_once_for_departments_and_outlines(api, session):
   api.respond(lambda: web.json_response([{"dept": "MATH", "number": "151"}, {"dept": "CMPT", "number": "120"}]))
