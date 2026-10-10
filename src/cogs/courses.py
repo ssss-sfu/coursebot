@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import date
 
@@ -8,10 +9,12 @@ from discord.ext import commands
 from src.courses import presentation
 from src.courses.pagination import send_pages
 from src.courses.prereqs import build_unlocks_embed, build_unlocks_index, course_key, find_outline
+from src.courses.presentation import current_and_next_term
 from src.courses.requirements import REQUIREMENT_NAMES, build_find_embed, filter_courses
-from src.courses.reviews import build_course_reviews_embed, current_and_next_term
 from src.courses.search import filter_departments, suggest_names
 from src.sfu_api import SFUApiError, SFUClient
+
+log = logging.getLogger(__name__)
 
 REQUIREMENT_CHOICES = [
   app_commands.Choice(name=f"{name} ({code})", value=code) for code, name in REQUIREMENT_NAMES.items()
@@ -32,7 +35,7 @@ class Courses(commands.Cog):
     try:
       departments = await self.sfu.get_departments()
     except SFUApiError as err:
-      print(f"department autocomplete failed: {err}")
+      log.warning("department autocomplete failed: %s", err)
       return []  # suggestions are optional; the user can still type a code
     return [app_commands.Choice(name=d, value=d) for d in filter_departments(departments, current)]
 
@@ -50,7 +53,7 @@ class Courses(commands.Cog):
     try:
       data = await self.sfu.get_json("/v1/rest/outlines", params={"dept": subject, "number": raw_number})
     except SFUApiError as err:
-      print(f"/course failed: {err}")
+      log.warning("/course failed: %s", err)
       await interaction.followup.send("An unexpected error occurred while fetching course outlines.")
       return
 
@@ -101,7 +104,7 @@ class Courses(commands.Cog):
     try:
       data = await self.sfu.get_json("/v1/rest/instructors", params={"name": instructor_name})
     except SFUApiError as err:
-      print(f"/offerings failed: {err}")
+      log.warning("/offerings failed: %s", err)
       embed = discord.Embed(
         title="Server Error",
         description="Couldn't reach the SFU Courses API. Try again later.",
@@ -156,38 +159,6 @@ class Courses(commands.Cog):
 
     await send_pages(interaction, presentation.build_offerings_pages(name, offerings))
 
-  # Course Reviews Command
-  # Top-rated instructors for a course, putting whoever teaches it this term or next first
-  @app_commands.command(name='course-reviews', description="Instructor ratings for a course")
-  @app_commands.describe(dept="Department code, e.g. CMPT", number="Course number, e.g. 225")
-  async def course_reviews(self, interaction: discord.Interaction, dept: str, number: str):
-    await interaction.response.defer()
-    dept, number = dept.strip(), number.strip()
-    try:
-      reviews = await self.sfu.get_course_reviews(dept, number)
-    except SFUApiError as err:
-      print(f"/course-reviews failed: {err}")
-      await interaction.followup.send("Couldn't reach the SFU Courses API. Try again later.")
-      return
-
-    if not reviews or not reviews.get("instructors"):
-      await interaction.followup.send(f"No reviews found for {dept.upper()} {number.upper()}.")
-      return
-
-    outline = None  # only used for the title and "(teaching …)"; the command still works without it
-    try:
-      outlines = await self.sfu.get_json("/v1/rest/outlines", params={"dept": dept, "number": number})
-      outline = outlines[0] if outlines else None
-    except SFUApiError as err:
-      print(f"/course-reviews outline lookup failed: {err}")
-
-    embed = build_course_reviews_embed(dept, number, reviews, outline, date.today())
-    await interaction.followup.send(embed=embed)
-
-  @course_reviews.autocomplete("dept")
-  async def course_reviews_dept_autocomplete(self, interaction: discord.Interaction, current: str):
-    return await self.department_choices(current)
-
   # Unlocks Command
   # Courses whose prerequisites mention the given course
   @app_commands.command(name='unlocks', description="Courses that list a course as a prerequisite")
@@ -197,7 +168,7 @@ class Courses(commands.Cog):
     try:
       outlines = await self.sfu.get_all_outlines()
     except SFUApiError as err:
-      print(f"/unlocks failed: {err}")
+      log.warning("/unlocks failed: %s", err)
       await interaction.followup.send("Couldn't reach the SFU Courses API. Try again later.")
       return
 
@@ -245,7 +216,7 @@ class Courses(commands.Cog):
     try:
       outlines = await self.sfu.get_all_outlines()
     except SFUApiError as err:
-      print(f"/find failed: {err}")
+      log.warning("/find failed: %s", err)
       await interaction.followup.send("Couldn't reach the SFU Courses API. Try again later.")
       return
 
@@ -290,7 +261,7 @@ class Courses(commands.Cog):
     try:
       data = await self.sfu.get_instructor_reviews()
     except SFUApiError as err:
-      print(f"/reviews failed: {err}")
+      log.warning("/reviews failed: %s", err)
       embed = discord.Embed(
         title="Error", description="Failed to fetch reviews. Try again later.", color=discord.Color.red()
       )

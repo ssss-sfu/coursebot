@@ -375,7 +375,7 @@ async def test_reviews_shared_name_shows_every_professor(cog, api):
   assert "[RateMyProfessors](https://example.com/1)" in embed.fields[1].value
 
 
-# /course-reviews
+# fixed date for /find's term option
 
 
 class Oct2026(date):
@@ -387,60 +387,6 @@ class Oct2026(date):
 @pytest.fixture
 def fixed_today(monkeypatch):
   monkeypatch.setattr("src.cogs.courses.date", Oct2026)
-
-
-async def run_course_reviews(cog, interaction, dept="CMPT", number="225"):
-  await cog.course_reviews.callback(cog, interaction, dept, number)
-
-
-@pytest.mark.asyncio
-async def test_course_reviews_real_data(cog, api, load_fixture, fixed_today):
-  api.respond(lambda: web.json_response(load_fixture("course_reviews_cmpt225")))
-  api.respond(lambda: web.json_response(load_fixture("outlines_cmpt225")))
-  interaction = make_interaction()
-  await run_course_reviews(cog, interaction, "cmpt ", " 225")
-
-  assert interaction.calls == ["defer", "send"]
-  assert [r.path for r in api.requests] == ["/v1/rest/reviews/courses/CMPT225", "/v1/rest/outlines"]
-  _, embed = sent(interaction)
-  assert embed.title.startswith("CMPT 225: Data Structures and Programming")
-  lines = embed.description.splitlines()
-  assert lines[0].startswith("[Igor Shinkar](") and lines[0].endswith("(teaching Fall 2026)")
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-  "response",
-  [lambda: web.Response(status=404), lambda: web.json_response({"course_code": "CMPT999", "instructors": []})],
-)
-async def test_course_reviews_none_found(cog, api, response):
-  api.respond(response)
-  interaction = make_interaction()
-  await run_course_reviews(cog, interaction, "cmpt", "999")
-  text, embed = sent(interaction)
-  assert text == "No reviews found for CMPT 999."
-  assert embed is None
-  assert len(api.requests) == 1  # no outline lookup when there's nothing to show
-
-
-@pytest.mark.asyncio
-async def test_course_reviews_api_error(cog, api):
-  api.respond(lambda: web.Response(status=500))
-  interaction = make_interaction()
-  await run_course_reviews(cog, interaction)
-  text, _ = sent(interaction)
-  assert text == "Couldn't reach the SFU Courses API. Try again later."
-
-
-@pytest.mark.asyncio
-async def test_course_reviews_still_works_when_outline_fails(cog, api, load_fixture, fixed_today):
-  api.respond(lambda: web.json_response(load_fixture("course_reviews_cmpt225")))
-  api.respond(lambda: web.Response(status=500))
-  interaction = make_interaction()
-  await run_course_reviews(cog, interaction)
-  _, embed = sent(interaction)
-  assert embed.title.startswith("CMPT 225 — ")  # no course title without the outline
-  assert "teaching" not in embed.description
 
 
 # /unlocks

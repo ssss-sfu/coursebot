@@ -64,12 +64,3 @@ class SFUClient:
   async def get_departments(self) -> list[str]:
     # there's no departments endpoint; every outline carries its dept code
     return sorted({o["dept"] for o in await self.get_all_outlines() if o.get("dept")})
-
-  async def get_course_reviews(self, dept: str, number: str) -> dict | None:
-    """RateMyProfessors data for one course, grouped by instructor; None if the course has no reviews."""
-    code = f"{dept}{number}".replace(" ", "").upper()
-
-    async def fetch():
-      return await self.get_json(f"/v1/rest/reviews/courses/{code}")
-
-    return await self._cached(f"course-reviews:{code}", self._reviews_ttl, fetch)

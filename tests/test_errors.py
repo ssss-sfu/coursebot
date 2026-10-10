@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import AsyncMock, Mock
 
 import discord
@@ -42,11 +43,12 @@ async def test_uses_followup_after_defer():
 
 
 @pytest.mark.asyncio
-async def test_prints_traceback_for_the_alarm(capsys):
+async def test_logs_error_with_traceback_for_the_alarm(caplog):
   await handle_app_command_error(make_interaction(already_responded=True), invoke_error())
-  err = capsys.readouterr().err
-  assert "Traceback" in err
-  assert "ValueError: boom" in err
+  assert [r.levelno for r in caplog.records] == [logging.ERROR]
+  assert "/course" in caplog.text
+  assert "Traceback" in caplog.text
+  assert "ValueError: boom" in caplog.text
 
 
 @pytest.mark.asyncio
