@@ -1,5 +1,5 @@
 # downloads a prebuild docker image with python 3.13 installed. slim is more lighweight
-FROM python:3.13-slim
+FROM python:3.14-slim
 # sets /app as the working directory, all commands run from here
 WORKDIR /app
 # copies requirements.txt file from local machine into the app directory.
