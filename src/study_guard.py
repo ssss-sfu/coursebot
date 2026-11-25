@@ -48,9 +48,10 @@ async def send_dm(member: discord.Member, message: str):
 async def send_channel_message(client: discord.Client, channelId: int, message: str):
   channel = client.get_channel(channelId)
   if channel and isinstance(channel, discord.TextChannel):
-    await channel.send(f'[STUDY TIME]: {message}')
+    return await channel.send(f'[STUDY TIME]: {message}')
   else:
     log.warning('Failed to send message to channel %s', channelId)
+    return None
 
 
 def setup(bot: discord.Client, config: StudyTimeConfig):
@@ -153,6 +154,8 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
     before: discord.VoiceState,
     after: discord.VoiceState,
   ):
+    if bot.superseded:
+      return
     if not study_time_role:
       raise RuntimeError('Study Time Role is missing. Initialization failed')
 
