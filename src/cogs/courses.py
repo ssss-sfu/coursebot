@@ -1,6 +1,7 @@
 import logging
 import re
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import discord
 from discord import app_commands
@@ -25,6 +26,7 @@ TERM_CHOICES = [
   app_commands.Choice(name="This term", value="current"),
   app_commands.Choice(name="Next term", value="next"),
 ]
+SFU_TIMEZONE = ZoneInfo("America/Vancouver")
 
 
 class Courses(commands.Cog):
@@ -46,7 +48,7 @@ class Courses(commands.Cog):
   async def course(self, interaction: discord.Interaction, subject: str, course_number: str):
     await interaction.response.defer()
     raw_number = course_number.strip()
-    if not re.fullmatch(r'\d+[A-Za-z]*', raw_number):
+    if not re.fullmatch(r'[A-Za-z]?\d+[A-Za-z]*', raw_number):
       await interaction.followup.send("Invalid course number format. Please use a format like '101' or '105W'.")
       return
 
@@ -85,7 +87,7 @@ class Courses(commands.Cog):
       embed.add_field(name="Recent Offerings", value="\n".join(offerings_list), inline=False)
     else:
       embed.add_field(name="Recent Offerings Found", value="No offerings available", inline=False)
-    embed.add_field(name="Credits", value=course['units'], inline=True)
+    embed.add_field(name="Credits", value=course['units'] or "N/A", inline=True)
     embed.add_field(name="Prerequisites", value=course['prerequisites'] or "None", inline=True)
     await interaction.followup.send(embed=embed)
 
@@ -222,7 +224,7 @@ class Courses(commands.Cog):
 
     term_name = None
     if term:
-      this_term, next_term = current_and_next_term(date.today())
+      this_term, next_term = current_and_next_term(datetime.now(SFU_TIMEZONE).date())
       term_name = this_term if term.value == "current" else next_term
 
     matches = filter_courses(

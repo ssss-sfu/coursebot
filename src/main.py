@@ -28,10 +28,13 @@ class CourseBot(commands.Bot):
 
   async def setup_hook(self):
     await self.add_cog(Courses(self.sfu))
-    synced = await self.tree.sync()
+    try:
+      synced = await self.tree.sync()
+    except discord.HTTPException:
+      log.exception("Command sync failed; the commands from the last sync stay registered")
+      return
     log.info("Synced %d command(s): %s", len(synced), ", ".join(cmd.name for cmd in synced))
 
-  # replaces @bot.event
   async def on_ready(self):
     log.info("Bot is online as %s", self.user)
     await self.study_guard.on_ready(self)

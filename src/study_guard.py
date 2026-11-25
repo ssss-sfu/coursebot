@@ -30,6 +30,13 @@ def prune_timestamps(timestamps: list[datetime], window_start: datetime) -> list
   return [t for t in timestamps if t > window_start]
 
 
+def wait_seconds(timestamps: list[datetime], now: datetime, window: timedelta, limit: int) -> int | None:
+  """Seconds until the oldest of `limit` pruned timestamps leaves the window; None while under the limit."""
+  if len(timestamps) < limit:
+    return None
+  return max(1, int((timestamps[0] + window - now).total_seconds()))
+
+
 async def send_dm(member: discord.Member, message: str):
   try:
     await member.send(message)
@@ -164,9 +171,8 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
         join_history[member.id] = prune_timestamps(join_history[member.id], now - join_limit_window_td)
 
         # Check join frequency limit before recording this join (AVOID DoS)
-        if len(join_history[member.id]) >= join_limit_count:
-          oldest = join_history[member.id][0]
-          remaining = max(1, int((oldest + join_limit_window_td - now).total_seconds()))
+        remaining = wait_seconds(join_history[member.id], now, join_limit_window_td, join_limit_count)
+        if remaining is not None:
           moderation_message = f"{member.name} ({member.id}) exceeded join limit with timeout {format_eta(remaining)} ({join_limit_count} in {format_eta(join_limit_window_s)} to {new_channel_name})"
 
           await send_dm(
@@ -181,9 +187,8 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
 
         # Check short-stay abuse
         short_stay_history[member.id] = prune_timestamps(short_stay_history[member.id], now - short_stay_window_td)
-        if len(short_stay_history[member.id]) >= short_stay_threshold:
-          oldest = short_stay_history[member.id][0]
-          remaining = max(1, int((oldest + short_stay_window_td - now).total_seconds()))
+        remaining = wait_seconds(short_stay_history[member.id], now, short_stay_window_td, short_stay_threshold)
+        if remaining is not None:
           moderation_message = f"{member.name} ({member.id}) flagged for short-stay abuse with timeout {format_eta(remaining)} ({len(short_stay_history[member.id])} short visits to {new_channel_name})"
 
           await send_dm(
@@ -218,7 +223,7 @@ def setup(bot: discord.Client, config: StudyTimeConfig):
           await send_channel_message(
             bot,
             moderation_channel_id,
-            f"[ERROR] Failed to remove role ${study_time_role.name} from {member.name} ({member.id}): {e}",
+            f"[ERROR] Failed to remove role {study_time_role.name} from {member.name} ({member.id}): {e}",
           )
     except Exception as error:
       await send_channel_message(

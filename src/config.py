@@ -95,12 +95,6 @@ def load(env: Mapping[str, str] | None = None) -> Config:
       f"must be less than STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS ({short_stay_window_s})"
     )
 
-  if join_limit_count >= join_limit_window_s:
-    raise RuntimeError(
-      f"Invalid .env config: STUDY_TIME_VC_JOIN_LIMIT_COUNT ({join_limit_count}) "
-      f"must be less than STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS ({join_limit_window_s})"
-    )
-
   return Config(
     discord_token=token,
     study_time_config=StudyTimeConfig(
