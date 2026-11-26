@@ -1,4 +1,3 @@
-#
 import discord
 
 from src.courses.prereqs import number_sort_key

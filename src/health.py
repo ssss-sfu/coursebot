@@ -5,7 +5,6 @@ from aiohttp import web
 log = logging.getLogger(__name__)
 
 
-# async health check
 async def health_check(request):
   return web.Response(text="ok", status=200)
 

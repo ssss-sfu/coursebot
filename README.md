@@ -1,127 +1,163 @@
 # SFU CourseBot
 
-A Discord Bot to show information about SFU courses.
+A Discord bot that answers questions about SFU courses: course details, who teaches what, what a course unlocks, and which courses fit a requirement. It also runs **Study Guard**, which gives members a role while they're in the study-time voice channel, giving message access to the connected text channel.
 
-Works with both '!' prefix commands and discord built-in / commands.
+Course data comes from the [SFU Courses API](https://api.sfucourses.com/).
 
-[Invite this bot to Server](https://discord.com/oauth2/authorize?client_id=1429023672772853841)
-## Usage/Examples
+### ---->  [Invite the bot to your server!](https://discord.com/oauth2/authorize?client_id=1429023672772853841)
 
-### Course Command
-The !course command retrieves detailed informatio nabout a specific course.
+## Commands
 
-**Usage:**
-```
-/course <subject: str> <course_number: str>
-```
-**Parameters:**
-- `subject`: The department code (e.g., `cmpt`, `math`, `engl`)
-- `course_number`: The course number (e.g., `120`, `225`, `105w`)
+| Command                                                             | Purpose                                                                                                                                                      | Example                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| `/course <subject> <course_number>`                                 | To search for a specific course. Provides title, credits, description, prerequisites and the 4 most recent offerings with instructors.                       | `/course CMPT 225`, `/course CMPT 105W`         |
+| `/offerings <instructor_name> [term]`                               | To search for all course offerings that an instructor has taught, one page per year (newest first). Filterable by`term`, e.g. `fall` or `spring 2026`        | `/offerings Brian Fraser`                       |
+| `/unlocks <dept> <number>`                                          | Finds other courses that list the searched course as a prerequisite.                                                                                         | `/unlocks CMPT 225`                             |
+| `/find [requirement] [dept] [level] [delivery] [no_prereqs] [term]` | To search for undergraduate courses matching every filter you give (at least one). `requirement` is a WQB designation, `term` is *This term* or *Next term*. | `/find requirement:Writing (W) level:300-level` |
+| `/reviews <instructor_name>`                                        | Prints an instructor's RateMyProfessors summary.                                                                                                             | `/reviews Brian Fraser`                         |
 
-**Examples:**
-```
-- /course CMPT 201
-- /course CMPT 105w
-- /course MACM 201
-```
+Notes:
 
-### Offerings Command
-The `!offerings` command retrieves course offerings taught by a specific instructor.
+- `/offerings` only shows terms where SFU has listed the instructor. if an upcoming terms doesnt have an instructor yet,  they may appear at a later date.
 
-**Usage:**
-```
-!offerings <instructor_name: str> <term: str>
-```
+## Study Guard
 
-**Parameters:**
-- `instructor_name`: The instructor's full name (use quotes for names with spaces)
-- `term` (optional): Filter by specific term (e.g., `fall`, `spring 2024`, `summer`)
+Study Guard watches one voice channel (study time):
 
-**Examples:**
-```
-!instructor "Brian Fraser"
-!instructor "John Smith" fall
-!instructor "Jane Doe" "spring 2024"
-!instructor Edgar summer
-```
+- Joining the channel gives you the study-time role, which unlocks the study-time text chat, and leaving removes it.
+- Joining too often or making many very short visits blocks the role for a while. The member gets a DM with the wait time and moderators get a report.
+- On startup and every reconnect, the bot re-syncs the role: everyone in the channel has it, nobody outside does.
 
-**Notes:**
-- If multiple instructors match your search, the bot will show a list and ask you to be more specific
-- Use quotation marks around names with spaces for exact matches
-- Term filtering is case-insensitive and supports partial matches
-- Without a term filter, all course offerings for the instructor will be shown
+### Setup in your server:
 
-### Sections Command
-The `!sections` command retrieves all available sections for a specific course in a given term.
+1. Create the study-time role.
+2. Give the bot **Manage Roles** and move the bot's role **above** the study-time role.
+3. Set the channel ids and role name in `.env` (see [Configuration](#configuration)).
 
-**Usage:**
-```
-/sections <year:int> <term: str> <dept: str> <number: int>
+## How it's built
+
+```mermaid
+flowchart LR
+  main["src/main.py<br/>CourseBot, startup, shutdown"] --> cog["src/cogs/courses.py<br/>slash commands"]
+  main --> guard["src/study_guard.py<br/>role + rate limits"]
+  main --> health["src/health.py<br/>GET /health :8080"]
+  main --> config["src/config.py<br/>.env → Config"]
+  main --> errors["src/errors.py<br/>command error handler"]
+  cog --> api["src/sfu_api.py<br/>SFUClient + cache"]
+  cog --> courses["src/courses/<br/>prereqs, requirements,<br/>search, presentation, pagination"]
+  api --> sfu[(api.sfucourses.com)]
 ```
 
-**Parameters:**
-- `year`: The year to search (YYYY) (e.g., `2026`, `2025`, `2019`)
-- `term`: The term/season to search in (e.g., `fall`, `spring`, `summer`)
-- `dept`: The department (e.g., `cmpt`, `math`, `engl`)
-- `number`: The course number (e.g., `120`, `225`, `105w`)
+- `src/courses/` holds pure functions (no Discord, no network), so most tests run without either.
+- `SFUClient` caches instructor reviews for 1 hour and the full outline list for 24 hours.
+- Python 3.13, [discord.py](https://discordpy.readthedocs.io/) 2.7, aiohttp.
 
-**Examples:**
-```
-/sections 2024 fall CMPT 120 
-/sections 2020 spring MATH 151
-/sections 2026 summer ENGL 199 
-```
+## Local development
 
-**Notes:**
-- Shows section details including instructor, schedule, and enrollment status
-- Term is case-insensitive
-- Parameters may require quotations
+You need Python 3.13 and a **separate dev bot** (its own application in the [Discord Developer Portal](https://discord.com/developers/applications)).
 
-### Reviews Command
-The `!reviews` command retrieves instructor reviews and ratings.
+In the Developer Portal, under **Bot → Privileged Gateway Intents**, turn on **Server Members**. Message Content isn't needed.
 
-**Usage:**
-```
-/reviews <instructor_name: str>
+```bash
+python3.13 -m venv venv
 ```
 
-**Parameters:**
-- `instructor_name`: The instructor's full name (use quotes for names with spaces)
-
-**Examples:**
-```
-!reviews "Brian Fraser"
-!reviews "John Smith"
-/reviews Edgar
+```bash
+source venv/bin/activate
 ```
 
-**Notes:**
-- Displays ratings and review information for the specified instructor
-- If multiple instructors match your search, the bot will show a list and ask you to be more specific
-- Use quotation marks around names with spaces for exact matches
+```bash
+pip install -r requirements-dev.txt
+```
+
+```bash
+cp .env.template .env
+```
+
+Fill in `.env` with the dev bot's token and your test server's ids, then run:
+
+```bash
+python -m src.main
+```
+
+Or in Docker, which matches production:
+
+```bash
+docker compose up --build
+```
+
+Press Ctrl+C once to stop; the bot shuts down cleanly.
+
+## Configuration
+
+Everything is read from environment variables (`.env` locally, App Runner settings in production).
+
+| Variable | Required | Default | Meaning |
+|---|---|---|---|
+| `DISCORD_TOKEN` | yes | | Bot token |
+| `GUILD_ID` | yes | | Server Study Guard runs in |
+| `STUDY_TIME_VC_CHANNEL_ID` | yes | | Study-time voice channel |
+| `STUDY_TIME_TEXT_CHANNEL_ID` | yes | | Channel for startup and restart notices |
+| `MODERATION_REPORT_VC_CHANNEL_ID` | yes | | Channel for moderation reports |
+| `STUDY_TIME_ROLE_NAME` | yes | | Name of the study-time role |
+| `STUDY_TIME_VC_JOIN_LIMIT_COUNT` | no | 5 | Joins allowed per window |
+| `STUDY_TIME_VC_JOIN_LIMIT_WINDOW_SECONDS` | no | 60 | Join-limit window |
+| `STUDY_TIME_VC_SHORT_STAY_SECONDS` | no | 30 | Visits shorter than this count as short |
+| `STUDY_TIME_VC_SHORT_STAY_THRESHOLD` | no | 5 | Short visits allowed per window |
+| `STUDY_TIME_VC_SHORT_STAY_WINDOW_SECONDS` | no | 120 | Short-stay window; must be longer than the short-stay time |
+| `CLEANUP_INTERVAL_SECONDS` | no | 600 | How often old join history is cleared |
+
+The bot wont start if a required value is missing or a number isn't a positive integer.
+
+## Linter Check
+
+```bash
+ruff check .
+```
+
+```bash
+ruff format --check .
+```
+
+```bash
+python -m pytest
+```
+
+CI runs these three by default. Pytest tests use saved real API responses in `tests/fixtures/` and a local aiohttp test server, so they don't touch the network or Discord.
+
+## Deployment
+
+Every push to `main` deploys automatically (`.github/workflows/ci-cd.yaml`):
+
+1. **Test:** ruff and pytest, where a failure stops the deploy.
+2. **Build:** GitHub Actions signs in to AWS with OIDC (no stored AWS keys), builds the Docker image and pushes it to ECR tagged with the commit SHA.
+3. **Deploy:** points the App Runner service at the new image and waits until the deployment succeeds or fails.
+
+App Runner checks `GET /health` on port 8080. The container runs as a non-root user.
+
+Repository settings the workflow needs:
+
+- Secrets: `AWS_ROLE_ARN`, `APP_RUNNER_SERVICE_ARN`
+- Variables: `AWS_REGION`, `ECR_REPOSITORY_NAME`
+
+**During a deploy** the old and new copies are both online for several minutes. The new copy posts a startup notice in the study-time text channel; the old copy sees it and stops handling commands and Study Guard, so nothing is answered twice.
+
+**Monitoring:** a CloudWatch metric filter counts `ERROR` log lines, and an alarm emails through SNS when any appear.
+
+## Contributing
+
+1. Branch off `main`.
+2. Make the change, with a test for any new logic.
+3. Run the three checks under [Tests](#tests) and try it against your dev bot.
+4. Open a pull request to `main`, merging will deploy it.
 
 ## Acknowledgements
 
- - [SFU COURSES API](https://api.sfucourses.com/) by Brian Rahadi. This is where I get my course info from.
- - Discord documentation was clutch
-## Authors
+- [SFU Courses API](https://api.sfucourses.com/) by Brian Rahadi, the source of all course data.
+
+## Contributors
 
 - [@smehars](https://www.github.com/smehars)
+- [@kylesaburao](https://github.com/kylesaburao)
 
-
-## Feedback
-
-If you have any feedback or questions, please reach out to me at meharsaini@hotmail.com.
-
-## Study Time Railguards
-
-### Setup
-
-#### Roles
-
-1. Create a Role to automatically assign to users for Study Time
-2. Ensure the bot role is above the Study Time assigned role
-
-#### Environment
-
-See `.env.template`
+Feedback or questions: meharsaini@hotmail.com
