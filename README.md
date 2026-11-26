@@ -39,7 +39,8 @@ Study Guard watches one voice channel (study time):
 ```mermaid
 flowchart LR
   main["src/main.py<br/>CourseBot, startup, shutdown"] --> cog["src/cogs/courses.py<br/>slash commands"]
-  main --> guard["src/study_guard.py<br/>role + rate limits"]
+  main --> guard["src/cogs/study_guard.py<br/>voice listener, roles"]
+  guard --> policy["src/study_guard.py<br/>JoinPolicy: rate limits"]
   main --> health["src/health.py<br/>GET /health :8080"]
   main --> config["src/config.py<br/>.env → Config"]
   main --> errors["src/errors.py<br/>command error handler"]
@@ -48,7 +49,7 @@ flowchart LR
   api --> sfu[(api.sfucourses.com)]
 ```
 
-- `src/courses/` holds pure functions (no Discord, no network), so most tests run without either.
+- `src/courses/` and `src/study_guard.py` hold pure functions (no Discord, no network), so most tests run without either.
 - `SFUClient` caches instructor reviews for 1 hour and the full outline list for 24 hours.
 - Python 3.13, [discord.py](https://discordpy.readthedocs.io/) 2.7, aiohttp.
 

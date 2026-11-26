@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from aiohttp import test_utils
 
-from src import config, study_guard
+from src import config
 from src.health import create_app
 from src.main import CourseBot, is_newer_startup
 from src.sfu_api import SFUClient
@@ -21,8 +21,7 @@ async def test_health_check_answers_ok(session):
 
 
 @pytest.mark.asyncio
-async def test_course_bot_builds_and_handles_events(session, valid_env, monkeypatch):
-  monkeypatch.setattr(study_guard, "is_study_guard_initialized", False)  # setup() refuses a second call per process
+async def test_course_bot_builds_and_handles_events(session, valid_env):
   bot = CourseBot(SFUClient(session, base_url="http://unused"), config.load(valid_env))
   assert bot.intents.members
   await bot.on_connect()
@@ -30,6 +29,22 @@ async def test_course_bot_builds_and_handles_events(session, valid_env, monkeypa
   assert await bot.tree.interaction_check(None)
   bot.superseded = True
   assert not await bot.tree.interaction_check(None)
+
+
+def voice(channel_id):
+  return SimpleNamespace(channel=SimpleNamespace(id=channel_id, name="other") if channel_id else None)
+
+
+@pytest.mark.asyncio
+async def test_study_guard_ignores_other_voice_channels(session, valid_env):
+  settings = config.load(valid_env)
+  CourseBot(SFUClient(session, base_url="http://unused"), settings)  # a second bot in one process is fine now
+  bot = CourseBot(SFUClient(session, base_url="http://unused"), settings)
+  member = SimpleNamespace(id=1, name="m")
+  # roles never synced and the bot isn't logged in: anything past the early return would raise
+  await bot.study_guard.on_voice_state_update(member, voice(None), voice(99))
+  await bot.study_guard.on_voice_state_update(member, voice(99), voice(None))
+  assert not bot.study_guard.policy.joins
 
 
 def message(id, author=1, content="[STUDY TIME]: study time should be working now..."):

@@ -8,8 +8,9 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
-from src import config, study_guard
+from src import config
 from src.cogs.courses import Courses
+from src.cogs.study_guard import StudyGuard, send_channel_message
 from src.errors import handle_app_command_error
 from src.health import run_health_server
 from src.sfu_api import SFUClient
@@ -32,10 +33,11 @@ class CourseBot(commands.Bot):
     self.tree.error(handle_app_command_error)
     self.startup_message = None
     self.superseded = False
-    self.study_guard = study_guard.setup(self, settings.study_time_config)
+    self.study_guard = StudyGuard(self, settings.study_time_config)
 
   async def setup_hook(self):
     await self.add_cog(Courses(self.sfu))
+    await self.add_cog(self.study_guard)
     try:
       synced = await self.tree.sync()
     except discord.HTTPException:
@@ -45,9 +47,9 @@ class CourseBot(commands.Bot):
 
   async def on_ready(self):
     log.info("Bot is online as %s", self.user)
-    await self.study_guard.on_ready(self)  # re-sync roles on every reconnect; joins/leaves can be missed while offline
+    await self.study_guard.sync_roles()  # re-sync roles on every reconnect; joins/leaves can be missed while offline
     if self.startup_message is None:  # announce once per process, or a reconnect looks like a newer copy
-      self.startup_message = await study_guard.send_channel_message(
+      self.startup_message = await send_channel_message(
         self, self.settings.study_time_config.text_channel_id, 'study time should be working now...'
       )
 
@@ -96,7 +98,7 @@ async def main():
         if shutdown_task in done:
           log.info("Received shutdown signal, shutting down")
           if not bot.superseded:  # a newer copy is already up; "restarting" would post after its "working now"
-            await study_guard.send_channel_message(
+            await send_channel_message(
               bot,
               settings.study_time_config.text_channel_id,
               'restarting for an update... if study time is still broken in a few minutes, ping mehar',
