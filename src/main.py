@@ -4,6 +4,7 @@ import signal
 
 import aiohttp
 import discord
+from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -16,11 +17,16 @@ from src.sfu_api import SFUClient
 log = logging.getLogger(__name__)
 
 
+class CourseTree(app_commands.CommandTree):
+  async def interaction_check(self, interaction) -> bool:
+    return not self.client.superseded
+
+
 class CourseBot(commands.Bot):
   def __init__(self, sfu: SFUClient, settings: config.Config):
     intents = discord.Intents.default()
     intents.members = True
-    super().__init__(command_prefix=commands.when_mentioned, intents=intents)
+    super().__init__(command_prefix=commands.when_mentioned, intents=intents, tree_cls=CourseTree)
     self.sfu = sfu
     self.settings = settings
     self.tree.error(handle_app_command_error)
@@ -57,7 +63,7 @@ class CourseBot(commands.Bot):
     log.info("Disconnected from Discord")
 
 
-# shortcut: if a deploy rolls back after the new copy announced itself, Study Guard stays off until the next deploy
+# shortcut: if a deploy rolls back after the new copy announced itself, this copy ignores commands and Study Guard until the next deploy
 def is_newer_startup(message, mine) -> bool:
   """True when `message` is another copy of this bot announcing itself after `mine` (ids grow over time)."""
   return (

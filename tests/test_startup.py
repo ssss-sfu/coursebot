@@ -27,6 +27,9 @@ async def test_course_bot_builds_and_handles_events(session, valid_env, monkeypa
   assert bot.intents.members
   await bot.on_connect()
   await bot.on_disconnect()
+  assert await bot.tree.interaction_check(None)
+  bot.superseded = True
+  assert not await bot.tree.interaction_check(None)
 
 
 def message(id, author=1, content="[STUDY TIME]: study time should be working now..."):
