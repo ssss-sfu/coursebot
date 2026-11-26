@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import datetime
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -112,7 +112,7 @@ async def test_course_67_easter_egg(cog, api):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("number", ["abc", "W105"])
+@pytest.mark.parametrize("number", ["abc", "XX99"])
 async def test_course_invalid_number_skips_api(cog, api, number):
   interaction = make_interaction()
   await run_course(cog, interaction, "CMPT", number)
@@ -378,15 +378,15 @@ async def test_reviews_shared_name_shows_every_professor(cog, api):
 # fixed date for /find's term option
 
 
-class Oct2026(date):
+class Oct2026(datetime):
   @classmethod
-  def today(cls):
-    return cls(2026, 10, 4)
+  def now(cls, tz=None):
+    return cls(2026, 10, 4, tzinfo=tz)
 
 
 @pytest.fixture
 def fixed_today(monkeypatch):
-  monkeypatch.setattr("src.cogs.courses.date", Oct2026)
+  monkeypatch.setattr("src.cogs.courses.datetime", Oct2026)
 
 
 # /unlocks

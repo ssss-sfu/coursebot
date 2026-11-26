@@ -11,6 +11,3 @@ services:
     #environment:
     #  - DISCORD_TOKEN=${DISCORD_TOKEN}
     env_file: .env
-    #mounts local data directory to /app/data in container for persistent storage(faster build times)
-    volumes:
-      - ./data:/app/data

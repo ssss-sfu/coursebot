@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 
 venv/
+
+graphify-out/
+.claude
+CLAUDE.md
