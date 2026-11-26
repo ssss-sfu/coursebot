@@ -54,7 +54,7 @@ flowchart LR
 
 ## Local development
 
-You need Python 3.13 and a **separate dev bot** (its own application in the [Discord Developer Portal](https://discord.com/developers/applications)). 
+You need Python 3.13 and a **separate dev bot** (its own application in the [Discord Developer Portal](https://discord.com/developers/applications)).
 
 In the Developer Portal, under **Bot → Privileged Gateway Intents**, turn on **Server Members**. Message Content isn't needed.
 
